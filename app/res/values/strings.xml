@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="home_guard">Brings TECHO5 Panel back when the tablet\'s own launcher comes up, and answers Allow when TECHO5 Panel asks again for the microphone, on tablets that will not let it be the home screen or keep its microphone.</string>
+</resources>

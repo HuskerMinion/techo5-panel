@@ -1,0 +1,20 @@
+bin/
+build/
+.gradle/
+*.apk
+*.aab
+*.log
+local.properties
+.DS_Store
+Thumbs.db
+__pycache__/
+
+# Per-unit dumps and backups: never committed (serial numbers, factory data).
+dumps/
+backups/
+
+# Signing keys and their passwords live outside every repository; these only guard against slips.
+*.keystore
+*.jks
+*.p12
+*.pass

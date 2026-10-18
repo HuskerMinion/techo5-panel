@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Two kinds of window are watched, and nothing else: the stock launcher's, so the panel can be put
+     back in front of it, and Android's permission prompt, so this app's own microphone prompt can be
+     answered (HomeGuard checks the prompt names this app before pressing anything). -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:packageNames="com.amazon.firelauncher,com.android.packageinstaller,com.android.permissioncontroller,com.google.android.permissioncontroller,com.google.android.packageinstaller"
+    android:notificationTimeout="100"
+    android:canRetrieveWindowContent="true"
+    android:accessibilityFlags="flagReportViewIds"
+    android:description="@string/home_guard" />

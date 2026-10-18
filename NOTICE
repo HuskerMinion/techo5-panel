@@ -1,0 +1,149 @@
+TECHO5 Panel includes code and files from other open-source projects.
+
+The APK carries TECHO5's daemon, echod (https://github.com/HuskerMinion/techo5, MIT), built for
+Android as lib/arm64-v8a/libechod.so and lib/armeabi-v7a/libechod.so, and the wake word models as
+assets/models. The entries below are carried from techo5's NOTICE for what the APK ships. The other
+Go modules compiled into echod are listed in techo5's echod/go.mod, each under its own license,
+which comes with its source. The app's own code (app/) is this repository's, under the MIT License
+in LICENSE.
+
+echod
+  Derived from EchoLocal, https://github.com/ygelfand/echolocal
+  Copyright (c) 2026 Yuri Gelfand — MIT License
+  echod/ began as EchoLocal's daemon, vendored whole (commit 80228c1, "vendor the EchoLocal daemon as
+  echod/ and port it to cronos") and developed from there. Much of it is still EchoLocal's code: the wake
+  word engine (internal/lib/wake), the ALSA client (internal/lib/alsa) and the service framework
+  (internal/service) almost unchanged, the voice satellite, media player, wake word selection and
+  component registry grown from EchoLocal's own, and many other files unchanged apart from the module
+  path.
+  EchoLocal's license applies to that code:
+
+  MIT License
+
+  Copyright (c) 2026 Yuri Gelfand
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+echod (dependency)
+  github.com/emiago/diago — Mozilla Public License 2.0
+  SIP calls and their media (feature/phone). Used unmodified; its source is at
+  https://github.com/emiago/diago, as the license requires for the binaries that include it.
+
+echod (dependency)
+  github.com/emiago/sipgo — BSD 2-Clause License
+  Copyright (c) 2022, Emir Aganovic. All rights reserved.
+  The SIP stack under diago.
+
+echod (dependency)
+  github.com/zaf/g711 — BSD 2-Clause License
+  Copyright (c) 2016-2024, Eleftherios (Lefteris) Zafiris. All rights reserved.
+  G.711 encoding and decoding for calls.
+
+  Both BSD 2-Clause licenses: redistribution and use in source and binary forms, with or without
+  modification, are permitted provided that the copyright notice, this list of conditions and the
+  following disclaimer are retained. THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+  CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES ARE DISCLAIMED. IN NO EVENT SHALL THE
+  COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DAMAGES ARISING IN ANY WAY OUT OF THE USE OF
+  THIS SOFTWARE.
+
+echod (dependency)
+  github.com/go-audio/riff — Apache License 2.0
+  Pulled in by diago for WAV files; not used for calls.
+
+echod (dependency)
+  github.com/hajimehoshi/go-mp3 — Apache License 2.0
+  MP3 decoding for announcements Home Assistant serves unconverted.
+
+echod (findings)
+  EchoMuse, https://github.com/wilbowes/EchoMuse — MIT License, Copyright (c) 2026 Wil Bowes
+  The Echo 2nd gen's parametric EQ (echod/internal/lib/asp/peq.go) uses the vendor's own filter
+  designs as EchoMuse PR #687 read them out of the vendor's library: Zölzer's shelf and peak, the
+  shelf taking no Q and root two written as 1.4142. Written here from those findings, not copied.
+
+Icon font (embedded in the daemon)
+  Material Design Icons webfont 7.4.47, echod/internal/lib/mdi/materialdesignicons.ttf — Apache License 2.0
+  Pictogrammers, https://pictogrammers.com/library/mdi/. The icons Home Assistant uses, for dashboards
+  the device draws itself. Used unmodified.
+
+Text fonts (embedded in the daemon)
+  The screen's font choices, echod/internal/lib/fonts/files — SIL Open Font License 1.1
+  (https://openfontlicense.org). Each font's OFL.txt, with its copyright line, is beside its files:
+    Inter, Copyright 2020 The Inter Project Authors (https://github.com/rsms/inter)
+    MuseoModerno, Copyright 2020 The MuseoModerno Project Authors (https://github.com/Omnibus-Type/MuseoModerno)
+    Exo, Copyright 2017 The Exo Project Authors (https://github.com/NDISCOVER/Exo-1.0)
+    Overpass, Copyright 2021 The Overpass Project Authors (https://github.com/RedHatOfficial/Overpass)
+    Saira, Copyright 2020 The Saira Project Authors (https://github.com/Omnibus-Type/Saira)
+    Comic Neue, Copyright 2014 The Comic Neue Project Authors (https://github.com/crozynski/comicneue)
+    Open Sans, Copyright 2020 The Open Sans Project Authors (https://github.com/googlefonts/opensans)
+    Google Sans Flex, Copyright 2015 The Google Sans Flex Authors
+      (https://github.com/googlefonts/googlesans-flex). "Google", "Google Sans" and "Google Sans Flex"
+      are trademarks of Google LLC; see TRADEMARKS.md beside the files. TECHO5 is not affiliated with
+      or endorsed by Google.
+  Taken from Google Fonts (https://github.com/google/fonts) and changed by tools/fonts/make_fonts.py:
+  variable fonts cut to static Regular (400) and Bold (700) instances, every font cut down to the
+  characters the screen draws, with hinting and all layout features but kerning removed. Go Regular
+  and Go Bold, the default, come from golang.org/x/image/font/gofont (BSD 3-Clause, the Go license).
+
+Sounds (embedded in the daemon)
+  Home Assistant Voice sounds, echod/internal/hardware/speaker/sounds — Creative Commons Attribution
+  4.0 International (https://creativecommons.org/licenses/by/4.0/)
+  "Home Assistant Voice Preview Edition Sounds" © 2024 by Clayton Charles Tapp
+  (https://www.cctaudio.com/), from https://github.com/esphome/home-assistant-voice-pe/tree/dev/sounds.
+  Changes: wake_word_triggered, timer_finished, mute_switch_on and mute_switch_off were converted from
+  FLAC to raw 16-bit mono PCM at 48 kHz; the sounds themselves are unchanged. Their license note is
+  sounds/LICENSE.md beside them.
+
+Wake word models (embedded in the daemon)
+  The stop word, echod/internal/feature/detect/assets/stop.tflite — Apache License 2.0
+  microWakeWord, https://github.com/kahrendt/microWakeWord. Embedded because it is not a choice:
+  nothing selects it and a device without it would have no way to be interrupted.
+
+  The openWakeWord front end, echod/internal/lib/oww/assets/melspectrogram.tflite and
+  embedding_model.tflite — Apache License 2.0
+  openWakeWord, https://github.com/dscripka/openWakeWord, whose code is Apache-2.0. The embedding
+  model is Google's speech_embedding (https://tfhub.dev/google/speech_embedding/1, Apache-2.0),
+  re-implemented by openWakeWord; the melspectrogram model is a fixed-parameter implementation of
+  Torch's melspectrogram, not a trained model. openWakeWord's CC BY-NC-SA 4.0 terms cover its six
+  pre-trained wake words, which TECHO5 does not ship — the wake words below come from elsewhere.
+
+Wake word models (in the APK, assets/models)
+  okay_nabu, hey_jarvis, hey_mycroft, alexa — Apache License 2.0
+  esphome/micro-wake-word-models, https://github.com/esphome/micro-wake-word-models, at commit
+  05b65922cc433c9df13e98e32a7fe520758c837e. Fetched by techo5's tools/fetch-inputs.py.
+
+  computer, jarvis, hey_friday, glados, hal, terminator, marvin, home_assistant — MIT License
+  Copyright (c) 2023 Florian Wartner.
+  fwartner/home-assistant-wakewords-collection,
+  https://github.com/fwartner/home-assistant-wakewords-collection, at commit
+  8bcd2f20bb7b76c351b2eff871fa1ce873fe9be2. The repository is MIT-licensed as a whole. It is a
+  community collection: it records no separate license, author or training data for each model, so
+  MIT from the repository is all that can be said about them here.
+
+Town names, echod/internal/feature/home/places.tsv.gz
+  From GeoNames (https://www.geonames.org/), the cities5000 and cities15000 lists, licensed under
+  the Creative Commons Attribution 4.0 License (https://creativecommons.org/licenses/by/4.0/).
+  Changes: reduced to places of 15,000 people or more, and of 5,000 or more in the U.S. and Canada;
+  each kept as its name (in Latin letters where the screen's font has no others), latitude,
+  longitude and population. The rain map credits GeoNames on screen. tools/places/make_places.py
+  makes the file from GeoNames' download.
+
+Radar color tables, echod/internal/feature/home/radar_palettes.go
+  The colors RainViewer's API documentation publishes for each radar reflectivity
+  (https://www.rainviewer.com/files/rainviewer_api_colors_table.csv), and the palette of the Iowa
+  Environmental Mesonet's national composite, used to read their tiles back into reflectivity.
