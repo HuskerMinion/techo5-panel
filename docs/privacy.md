@@ -17,6 +17,28 @@ app asks for and why.
   and download updates. It sends nothing about you or the tablet.
 - **The app is not debuggable** in release builds, and allows no plain-http traffic.
 
+## What `echod` serves on your network
+
+A tablet has no firewall the app could set, so these are open to your local network, as on an Echo
+running TECHO5:
+
+| Port | What | When |
+|---|---|---|
+| 6053 (TCP) | The ESPHome API Home Assistant connects to. Encrypted with the key Home Assistant sets. | Always |
+| 5353 (UDP) | mDNS, so Home Assistant and the other TECHO5 devices find the panel. | Always |
+| 8181 (TCP) | The setup page, the screen page, and intercom calls from other TECHO5 devices. | While one of them is switched on |
+| 8928 (TCP) | Sendspin, for a music server playing to the panel. | While Sendspin is on |
+| 1900 (UDP) | DLNA discovery, so a phone app can cast audio to the panel. | While DLNA is on |
+| 5060 (UDP) or 5061 (TLS) | SIP calls. A call rings only when it comes from your provider. | While a SIP account is set |
+
+There is no camera stream on a panel (8554 on an Echo with a camera), no SSH and no remote adb.
+
+`echod` also connects out, as on an Echo: to Home Assistant, to the weather and rain map sources
+(Open-Meteo, RainViewer, the Iowa Environmental Mesonet, NASA GIBS, and the US National Weather
+Service for alerts), to what it is asked to play (radio stations and their directories, Music
+Assistant, announcements, lyrics from LRCLIB), to the calendars and photo servers you set, to your
+SIP provider when an account is set, and to the other TECHO5 devices on your network.
+
 ## Permissions
 
 | Permission | Why |
@@ -31,8 +53,10 @@ app asks for and why.
 | `REQUEST_INSTALL_PACKAGES` | Installs the app's own updates. It installs nothing else. |
 | `UPDATE_PACKAGES_WITHOUT_USER_ACTION` | On Android 12 and later, the app's own updates install without a prompt. |
 
-Updates are checked against the sha256 in the release's `version.json`, and Android itself refuses
-any APK not signed with the app's own key.
+Updates are checked against the sha256 in the release's `version.json`. That only catches a download
+that went wrong: `version.json` comes from the same place as the APK. What protects the tablet is
+Android itself, which installs an update only when it is signed with the app's own key and is not
+older than the version installed.
 
 ## HomeGuard, the accessibility service
 
