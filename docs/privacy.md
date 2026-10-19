@@ -54,14 +54,16 @@ anywhere.
 
 1. **When the Fire launcher's window comes up**, it brings TECHO5 Panel back to the front. It also
    does this once when it starts. It presses nothing.
-2. **On a permission prompt**, it taps **Allow** only when the prompt's message names this app
+2. **On a permission prompt**, it taps **Allow** only within half a minute of the panel's own
+   screen asking for the microphone, and only when the prompt's message names this app
    (TECHO5 Panel) and asks to record audio. It taps the prompt's "while using the app" button, or
    its plain Allow button when there is no such button. Any other prompt is left alone. The check
    reads the English text "record audio", so on a tablet set to another language it presses nothing.
-3. **On an install prompt**, it taps **Install** only when the prompt is an update to this app: the
-   installer's app name is TECHO5 Panel (the Fire's install screen), or the dialog's title is
-   TECHO5 Panel and it says it is an update (newer Android). The button is disabled for a moment
-   after a prompt appears, so it tries again every half second, up to ten times. Any other install
-   prompt is left alone.
+3. **On an install prompt**, it taps **Install** only within a minute of the app's own updater
+   handing Android an update, and only when the prompt is an update to this app: the installer's
+   app name is TECHO5 Panel (the Fire's install screen), or the dialog's title is TECHO5 Panel
+   (newer Android), and either way the prompt says it is an update, not a new install. The button is
+   disabled for a moment after a prompt appears, so it tries again every half second, up to ten
+   times. Any other install prompt is left alone.
 
 On Android 12 and later the app's updates need no prompt, so step 3 does not come up there.

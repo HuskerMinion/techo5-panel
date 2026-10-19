@@ -20,8 +20,10 @@ import java.util.List;
  *
  * The microphone. Fire OS takes RECORD_AUDIO back from any app not installed from Amazon's Appstore,
  * at every boot and now and then after Wi-Fi comes back, and nothing stops it. The panel asks again
- * and this answers Allow, for this app's own microphone prompt only: the prompt has to name this app
- * and ask about recording audio, or nothing is pressed.
+ * and this answers Allow, for this app's own microphone prompt only: the panel's screen has to have
+ * asked in the last half minute, and the prompt has to name this app and ask about recording audio,
+ * or nothing is pressed. An update on an Android that wants it confirmed is answered the same way:
+ * only just after the app's own Updater committed one (see answerUpdatePrompt).
  */
 public class HomeGuard extends AccessibilityService {
     private static final String TAG = "techo5-panel";
@@ -63,6 +65,7 @@ public class HomeGuard extends AccessibilityService {
     }
 
     private void answerMicPrompt(String pkg) {
+        if (!MainActivity.justAskedForMic()) return;
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) return;
         try {
@@ -79,15 +82,17 @@ public class HomeGuard extends AccessibilityService {
 
     /**
      * The confirmation Android shows for an update installed by something other than a store: pressed
-     * only when it is an update to this app, the one Updater asked for. Two layouts: AOSP's screen
-     * (Fire OS: app_name, ok_button) and the dialog newer Android shows (alertTitle, button1). Android
-     * keeps the button disabled for a moment after the prompt appears, so tapping too soon is not
-     * possible; it is tried again for a few seconds.
+     * only when it is an update to this app, the one Updater asked for: within a minute of Updater's own
+     * commit, naming this app, and saying it is an update rather than a new install. Two layouts: AOSP's
+     * screen (Fire OS: app_name, ok_button) and the dialog newer Android shows (alertTitle, button1).
+     * Android keeps the button disabled for a moment after the prompt appears, so tapping too soon is
+     * not possible; it is tried again for a few seconds.
      *
      * Android 12 and later install the update without a prompt (see Updater), which matters: Android 14
      * hides the installer's buttons from accessibility services that are not assistive tools.
      */
     private void answerUpdatePrompt(AccessibilityEvent e, final int tries) {
+        if (!Updater.justCommitted()) return;
         // The window the event came from, climbed to its top: on some tablets (the Galaxy Tab S6 Lite)
         // the "active window" is not the installer's dialog while it is up.
         AccessibilityNodeInfo root = e != null ? top(e.getSource()) : null;
@@ -96,12 +101,12 @@ public class HomeGuard extends AccessibilityService {
         try {
             String label = getApplicationInfo().loadLabel(getPackageManager()).toString();
             AccessibilityNodeInfo ok = null;
+            boolean update = isUpdatePrompt(root);
             AccessibilityNodeInfo name = find(root, "com.android.packageinstaller:id/app_name");
             if (name != null && name.getText() != null && name.getText().toString().equals(label)) {
-                ok = find(root, "com.android.packageinstaller:id/ok_button");
+                if (update) ok = find(root, "com.android.packageinstaller:id/ok_button");
             } else {
                 AccessibilityNodeInfo title = find(root, "android:id/alertTitle");
-                boolean update = find(root, "com.android.packageinstaller:id/install_confirm_question_update") != null;
                 if (update && title != null && title.getText() != null && title.getText().toString().equals(label)) {
                     ok = find(root, "android:id/button1");
                 }
@@ -128,6 +133,27 @@ public class HomeGuard extends AccessibilityService {
         } finally {
             root.recycle();
         }
+    }
+
+    /**
+     * Whether the install prompt is for an update: the dialog's own update line (newer Android), or
+     * AOSP's question line holding the installer's own words for an update (Fire OS's screen, where the
+     * one line says either), read from the installer in the tablet's language.
+     */
+    private boolean isUpdatePrompt(AccessibilityNodeInfo root) {
+        String pi = "com.android.packageinstaller";
+        if (find(root, pi + ":id/install_confirm_question_update") != null) return true;
+        AccessibilityNodeInfo q = find(root, pi + ":id/install_confirm_question");
+        if (q == null || q.getText() == null) return false;
+        try {
+            android.content.res.Resources r = getPackageManager().getResourcesForApplication(pi);
+            for (String s : new String[] {"install_confirm_question_update", "install_confirm_question_update_system"}) {
+                int id = r.getIdentifier(s, "string", pi);
+                if (id != 0 && r.getString(id).contentEquals(q.getText())) return true;
+            }
+        } catch (android.content.pm.PackageManager.NameNotFoundException | RuntimeException ignored) {
+        }
+        return false;
     }
 
     /** Whether the prompt on the screen is this app's, about the microphone. */

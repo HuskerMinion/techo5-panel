@@ -48,6 +48,11 @@ final class Updater {
     private static final long PENDING_MS = 24 * 3600_000L;
     private static volatile long pendingCode, pendingAt;
 
+    // When this app last committed an update of its own (elapsedRealtime, 0 for never), for HomeGuard:
+    // it presses Install on an update prompt only this soon after.
+    private static final long PROMPT_WINDOW_MS = 60_000;
+    private static volatile long committedAt;
+
     private final Context ctx;
 
     Updater(Context ctx) {
@@ -69,6 +74,12 @@ final class Updater {
         } catch (PackageManager.NameNotFoundException e) {
             return "update";
         }
+    }
+
+    /** Whether this app committed an update of its own in the last minute, so a prompt now is for it. */
+    static boolean justCommitted() {
+        long at = committedAt;
+        return at != 0 && SystemClock.elapsedRealtime() - at < PROMPT_WINDOW_MS;
     }
 
     /** The installer said how the committed update ended: it may be tried again. */
@@ -193,12 +204,14 @@ final class Updater {
             PendingIntent done = PendingIntent.getBroadcast(ctx, id, new Intent(ctx, UpdateReceiver.class), flags);
             pendingCode = code;
             pendingAt = SystemClock.elapsedRealtime();
+            committedAt = pendingAt;
             s.commit(done.getIntentSender());
             committed = true;
             Log.i(TAG, "updates: installing");
         } finally {
             if (!committed) {
                 pendingCode = 0;
+                committedAt = 0;
                 try {
                     pi.abandonSession(id);
                 } catch (RuntimeException ignored) {

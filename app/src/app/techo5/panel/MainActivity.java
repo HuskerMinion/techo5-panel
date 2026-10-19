@@ -25,6 +25,9 @@ import android.widget.TextView;
  */
 public class MainActivity extends Activity implements ScreenLink.Viewer {
     private static final int ASK_MIC = 1;
+    // HomeGuard answers a microphone prompt only this soon after this screen asked for one.
+    private static final long ASK_WINDOW_MS = 30_000;
+    private static volatile long askedForMicAt;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private Handler touches;
@@ -46,7 +49,7 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
             text.setTextSize(20);
             text.setText("TECHO5 Panel needs the microphone.");
             setContentView(text);
-            requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, ASK_MIC);
+            askForMic();
             return;
         }
         start();
@@ -62,6 +65,17 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
         }
     }
 
+    private void askForMic() {
+        askedForMicAt = android.os.SystemClock.elapsedRealtime();
+        requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, ASK_MIC);
+    }
+
+    /** Whether this screen asked for the microphone in the last half minute, so a prompt now is its own. */
+    static boolean justAskedForMic() {
+        long at = askedForMicAt;
+        return at != 0 && android.os.SystemClock.elapsedRealtime() - at < ASK_WINDOW_MS;
+    }
+
     private void start() {
         startForegroundService(new Intent(this, PanelService.class));
         view = new PanelView(this);
@@ -74,7 +88,7 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
         super.onResume();
         // The microphone can be taken back while the app runs (Fire OS does, see HomeGuard): ask again.
         if (view != null && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, ASK_MIC);
+            askForMic();
         }
         fullScreen();
         if (view != null) {
