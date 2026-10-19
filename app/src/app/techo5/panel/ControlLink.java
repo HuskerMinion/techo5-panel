@@ -26,9 +26,11 @@ import java.nio.charset.StandardCharsets;
  * something else moves the media volume (the buttons, the slider), the new level goes back as
  * "volume <step>".
  *
- * Updates: "update check" from echod is a check asked for on the screen or from Home Assistant; the
- * app's Updater does it, since the app is what gets updated. "update <running> <offered>" goes back
- * after every check and whenever echod connects, for Home Assistant's update card.
+ * Updates: "update check" from echod is a check asked for on the screen or from Home Assistant, which
+ * only reports; "update install" is Home Assistant's Install, or the night's automatic install, which
+ * installs a newer build if there is one. The app's Updater does both, since the app is what gets
+ * updated. "update <running> <offered>" goes back after every check and whenever echod connects, for
+ * Home Assistant's update card.
  */
 final class ControlLink {
     private static final String TAG = "techo5-panel";
@@ -94,9 +96,10 @@ final class ControlLink {
     }
 
     private void handle(String[] w) {
-        if (w.length >= 2 && w[0].equals("update") && w[1].equals("check")) {
-            Log.i(TAG, "updates: a check was asked for");
-            updater.checkNow();
+        if (w.length >= 2 && w[0].equals("update") && (w[1].equals("check") || w[1].equals("install"))) {
+            boolean install = w[1].equals("install");
+            Log.i(TAG, "updates: " + (install ? "an install" : "a check") + " was asked for");
+            updater.checkNow(install);
             return;
         }
         if (w.length >= 3 && w[0].equals("volume")) {

@@ -20,6 +20,8 @@ public class UpdateReceiver extends BroadcastReceiver {
             if (confirm != null) ctx.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             return;
         }
+        // Installed (this process is about to be replaced), failed or turned down: settled either way.
+        Updater.settled();
         Log.i("techo5-panel", "updates: install status " + status + " "
                 + i.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE));
     }
