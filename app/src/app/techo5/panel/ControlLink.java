@@ -46,6 +46,7 @@ final class ControlLink {
     // The levels this side set, so the changes they cause, however late Android reports them, are not
     // sent back as the user's (OwnLevels). Under lock.
     private final OwnLevels own = new OwnLevels();
+    private final BroadcastReceiver moved;
 
     ControlLink(Context ctx) {
         audio = ctx.getSystemService(AudioManager.class);
@@ -54,7 +55,7 @@ final class ControlLink {
         live = this;
         // The application context: the service that makes this can be killed and made again, and a
         // receiver registered on it would leak. Only Android sends this, so no other app may.
-        BroadcastReceiver moved = new BroadcastReceiver() {
+        moved = new BroadcastReceiver() {
             @Override
             public void onReceive(Context c, Intent i) {
                 if (i.getIntExtra("android.media.EXTRA_VOLUME_STREAM_TYPE", -1) == AudioManager.STREAM_MUSIC) {
@@ -74,9 +75,28 @@ final class ControlLink {
         return Math.max(1, audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC));
     }
 
-    void serve(LocalServerSocket server) {
-        while (true) {
-            try (LocalSocket conn = server.accept()) {
+    /** The service is going: no more volume reports from this link. */
+    void close() {
+        try {
+            ctx.unregisterReceiver(moved);
+        } catch (RuntimeException ignored) {
+        }
+        if (live == this) live = null;
+    }
+
+    /** One connection at a time, until the service stops and closes the socket (see ScreenLink.serve). */
+    void serve(PanelService svc, LocalServerSocket server) {
+        while (!svc.stopping()) {
+            LocalSocket accepted;
+            try {
+                accepted = server.accept();
+            } catch (IOException e) {
+                if (svc.stopping()) return;
+                Log.w(TAG, "control socket: " + e.getMessage());
+                ScreenLink.pause();
+                continue;
+            }
+            try (LocalSocket conn = accepted) {
                 if (!LocalPeer.isOwn(conn, "techo5.ctl")) continue;
                 Log.i(TAG, "echod connected to the control line");
                 synchronized (lock) {

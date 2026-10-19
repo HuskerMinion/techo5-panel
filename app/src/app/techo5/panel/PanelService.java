@@ -65,6 +65,8 @@ public class PanelService extends Service {
     private LocalServerSocket controlServer;
     private volatile Process daemon;
     private Notification notification;
+    private ConnectivityManager.NetworkCallback networkWatch;
+    private ControlLink control;
 
     @Override
     public void onCreate() {
@@ -93,7 +95,7 @@ public class PanelService extends Service {
         // reads them from a file this keeps current: at start, and whenever the network changes.
         writeInterfaces();
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
-        cm.registerDefaultNetworkCallback(new ConnectivityManager.NetworkCallback() {
+        networkWatch = new ConnectivityManager.NetworkCallback() {
             @Override
             public void onAvailable(Network network) {
                 writeInterfaces();
@@ -108,7 +110,8 @@ public class PanelService extends Service {
             public void onLost(Network network) {
                 writeInterfaces();
             }
-        });
+        };
+        cm.registerDefaultNetworkCallback(networkWatch);
 
         new Updater(this).start();
 
@@ -137,11 +140,11 @@ public class PanelService extends Service {
         }
         try {
             controlServer = new LocalServerSocket("techo5.ctl");
-            final ControlLink control = new ControlLink(this);
+            control = new ControlLink(this);
             new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    control.serve(controlServer);
+                    control.serve(PanelService.this, controlServer);
                 }
             }, "control").start();
         } catch (IOException e) {
@@ -187,11 +190,23 @@ public class PanelService extends Service {
         }
     }
 
+    /** Whether the service is going: the socket loops end rather than accept again. */
+    boolean stopping() {
+        return stopping;
+    }
+
     @Override
     public void onDestroy() {
         stopping = true;
         Process p = daemon;
         if (p != null) p.destroy();
+        if (networkWatch != null) {
+            try {
+                getSystemService(ConnectivityManager.class).unregisterNetworkCallback(networkWatch);
+            } catch (RuntimeException ignored) {
+            }
+        }
+        if (control != null) control.close();
         try {
             if (micServer != null) micServer.close();
             if (speakerServer != null) speakerServer.close();

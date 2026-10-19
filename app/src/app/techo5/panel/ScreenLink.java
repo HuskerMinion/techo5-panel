@@ -80,13 +80,25 @@ final class ScreenLink {
         }
     }
 
-    /** Serves echod one connection at a time, for as long as the service runs. */
-    static void serve(Context ctx, LocalServerSocket server) {
-        while (true) {
-            try (LocalSocket conn = server.accept()) {
-                if (!LocalPeer.isOwn(conn, "techo5.screen")) continue;
+    /**
+     * Serves echod one connection at a time, for as long as the service runs: once it stops, its socket
+     * is closed and accept fails, and the loop ends rather than spinning on it.
+     */
+    static void serve(PanelService svc, LocalServerSocket server) {
+        while (!svc.stopping()) {
+            LocalSocket conn;
+            try {
+                conn = server.accept();
+            } catch (IOException e) {
+                if (svc.stopping()) return;
+                Log.w(TAG, "screen socket: " + e.getMessage());
+                pause();
+                continue;
+            }
+            try (LocalSocket c = conn) {
+                if (!LocalPeer.isOwn(c, "techo5.screen")) continue;
                 Log.i(TAG, "echod connected to the screen");
-                run(ctx, conn);
+                run(svc, c);
             } catch (IOException e) {
                 Log.w(TAG, "screen connection ended: " + e.getMessage());
             } finally {
@@ -94,7 +106,15 @@ final class ScreenLink {
                     out = null;
                 }
             }
-            if (Thread.currentThread().isInterrupted()) return;
+        }
+    }
+
+    /** A second between tries at a socket that failed for a reason of its own, so it is not a busy loop. */
+    static void pause() {
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException ignored) {
+            Thread.currentThread().interrupt();
         }
     }
 
