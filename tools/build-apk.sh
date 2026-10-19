@@ -1,7 +1,7 @@
 #!/bin/sh
 # Builds the TECHO5 Panel APK with the Android SDK's own tools, no Gradle: echod from a techo5
-# checkout (the core with the panel build), then aapt2, javac, d8, zipalign and apksigner.
-# docs/building.md has what to install and how to make a signing key.
+# checkout (main, or a tag v1.3.0 or later, which have the panel build), then aapt2, javac, d8,
+# zipalign and apksigner. docs/building.md has what to install and how to make a signing key.
 #
 #   tools/build-apk.sh [path to techo5 checkout]    (default $TECHO5, else ../techo5)
 #
@@ -18,8 +18,13 @@
 #   ANDROID_PLATFORM    the platform to build against, like android-34 (default: 34 if there,
 #                       else the newest).
 #
+# Go and the NDK are pinned (GO_VERSION, NDK_VERSION below, the same as techo5's CI panel job), so
+# echod here comes out byte for byte as CI builds and attests it from the same commit: release.sh
+# compares the two. A release build refuses any other; a debug build says so and goes on.
+#
 # Output: build/techo5-panel.apk, with build/version-code, build/version-name, build/update-url,
-# build/kind ("release" or "debug") and build/source (the techo5 commit echod came from).
+# build/kind ("release" or "debug") and build/source (the techo5 commit echod came from, and the Go
+# and NDK it was built with).
 set -eu
 
 # Where a release build updates from: the latest release's downloads (version.json and the APK).
@@ -29,6 +34,10 @@ ABIS="arm64-v8a armeabi-v7a"
 # The app's minSdkVersion (Android 8.0: the foreground service and its notification channel need it).
 # The NDK compiler is picked for the same API level, and d8 builds for it.
 API=26
+# The Go and the NDK echod is built with: techo5's .github/workflows/build.yml (the panel job) names
+# the same two. Move them together.
+GO_VERSION=1.26.8
+NDK_VERSION=28.2.13676358
 # The wake word models the APK carries, each as <name>.tflite and <name>.json: the Echos' own set
 # (techo5's tools/fetch-inputs.py), and nothing else that happens to be in the folder.
 MODEL_NAMES="okay_nabu hey_jarvis hey_mycroft alexa computer jarvis hey_friday glados hal terminator marvin home_assistant"
@@ -81,7 +90,7 @@ fi
 
 [ -d "$techo5/echod" ] || die "$techo5 is not a techo5 checkout (no echod in it); name it, or set TECHO5"
 [ -f "$techo5/echod/internal/layout/device_panel.go" ] ||
-	die "$techo5 has no panel build (echod/internal/layout/device_panel.go); check out the core branch"
+	die "$techo5 has no panel build (echod/internal/layout/device_panel.go); check out techo5's main, or a tag v1.3.0 or later"
 git -C "$techo5" rev-parse --git-dir >/dev/null 2>&1 || die "$techo5 is not a git checkout"
 
 [ -d "$sdk" ] || die "no Android SDK at $sdk (set ANDROID_SDK_ROOT)"
@@ -100,8 +109,33 @@ jar=$platform/android.jar
 d8=$bt/d8 apksigner=$bt/apksigner
 [ -f "$bt/d8.bat" ] && d8=$bt/d8.bat
 [ -f "$bt/apksigner.bat" ] && apksigner=$bt/apksigner.bat
-ndk=$(ls -d "$sdk"/ndk/* 2>/dev/null | sort -V | tail -1)
-[ -n "$ndk" ] || die "no NDK in $sdk/ndk"
+# Loud, and for a release build fatal: a library built with another Go or NDK is not the one CI
+# attests, so release.sh would refuse it anyway.
+mismatch() {
+	if [ "$debug" = 1 ]; then
+		echo "build-apk: ****************************************************************" >&2
+		echo "build-apk: WARNING: $*" >&2
+		echo "build-apk: a debug build goes on; a release build refuses this" >&2
+		echo "build-apk: ****************************************************************" >&2
+	else
+		die "$*"
+	fi
+}
+
+ndk=$sdk/ndk/$NDK_VERSION
+if [ ! -d "$ndk" ]; then
+	other=$(ls -d "$sdk"/ndk/* 2>/dev/null | sort -V | tail -1)
+	[ -n "$other" ] || die "no NDK in $sdk/ndk (install ndk;$NDK_VERSION with sdkmanager)"
+	mismatch "NDK $NDK_VERSION is not in $sdk/ndk (install ndk;$NDK_VERSION with sdkmanager); found $(basename "$other")"
+	ndk=$other
+fi
+
+# Go: the pinned toolchain, which the go command fetches itself the first time (Go 1.21 and later),
+# unless GOTOOLCHAIN is set to something else on purpose.
+export GOTOOLCHAIN=${GOTOOLCHAIN:-go$GO_VERSION}
+command -v go >/dev/null 2>&1 || die "no go on PATH"
+gover=$(cd "$techo5/echod" && go env GOVERSION) || die "go did not run (GOTOOLCHAIN=$GOTOOLCHAIN)"
+[ "$gover" = "go$GO_VERSION" ] || mismatch "echod would be built with $gover, not go$GO_VERSION (unset GOTOOLCHAIN)"
 
 # Where the app updates from. A fork sets its own; only https is taken (the app allows no plain http).
 url=${PANEL_UPDATE_URL:-$PUBLIC_UPDATE_URL}
@@ -144,7 +178,7 @@ for abi in $ABIS; do
 	esac
 	cc=$(ls "$ndk"/toolchains/llvm/prebuilt/*/bin/$triple$API-clang* 2>/dev/null | head -1)
 	[ -n "$cc" ] || die "no $triple$API-clang in $ndk"
-	echo "== echod for $abi ($kind build, from $branch $commit, $dirty)"
+	echo "== echod for $abi ($kind build, from $branch $commit, $dirty; $gover, NDK $(basename "$ndk"))"
 	mkdir -p "$out/apk/lib/$abi"
 	(cd "$techo5/echod" && GOOS=android GOARCH=$goarch GOARM=$goarm CGO_ENABLED=1 CC="$cc" \
 		go build -tags "$tags" -trimpath \
@@ -217,6 +251,7 @@ echo "$code" > "$out/version-code"
 echo "$name" > "$out/version-name"
 echo "$url" > "$out/update-url"
 echo "$kind" > "$out/kind"
-printf '%s %s %s\n' "$commit" "$dirty" "$techo5" > "$out/source"
+printf 'commit %s\nstate %s\ngo %s\nndk %s\ntecho5 %s\n' "$commit" "$dirty" "$gover" "$(basename "$ndk")" "$techo5" \
+	> "$out/source"
 echo "== $kind build $name, updating from ${url:-nowhere}"
 ls -la "$out/techo5-panel.apk"

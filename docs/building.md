@@ -8,14 +8,21 @@
 - **Android SDK** build-tools: `aapt2`, `d8`, `zipalign` and `apksigner` (build-tools 34 or later).
 - **Android platform 34** (`platforms/android-34/android.jar`). The app targets API 34. A newer
   platform works too; the script takes 34 when it is there, else the newest.
-- **Android NDK** (r26 or later), for its clang: `echod` is a Go program with cgo, built for Android.
+- **Android NDK 28.2.13676358** exactly, for its clang: `echod` is a Go program with cgo, built for
+  Android.
 - **JDK** 17 or later: `javac`, `jar` and `keytool`.
-- **Go**, the version techo5's `echod/go.mod` asks for.
+- **Go 1.21 or later** on the PATH. The build uses Go 1.26.8 exactly: it sets `GOTOOLCHAIN=go1.26.8`,
+  and the go command downloads that toolchain the first time.
 - **A POSIX shell**: any on Linux or macOS. On Windows, Git Bash (from Git for Windows).
 - **git**, and **Python 3** for fetching the wake word models.
-- **A techo5 checkout with the core branch**: the
-  [techo5](https://github.com/HuskerMinion/techo5) repo at the branch with the panel build (the
-  `panel` Go build tag and `echod/internal/layout/device_panel.go`).
+- **A techo5 checkout**: [techo5](https://github.com/HuskerMinion/techo5) at `main`, or at a tag
+  v1.3.0 or later. Those have the panel build (the `panel` Go build tag and
+  `echod/internal/layout/device_panel.go`).
+
+Go and the NDK are pinned so `echod` comes out byte for byte as techo5's CI builds it from the same
+commit (see [Releasing](#releasing)). The two versions are `GO_VERSION` and `NDK_VERSION` at the top
+of `tools/build-apk.sh`, the same as the panel job in techo5's `.github/workflows/build.yml`. A
+release build refuses any other Go or NDK. A debug build prints a warning and goes on.
 
 With the SDK's `sdkmanager`:
 
@@ -100,12 +107,34 @@ Every build runs `tools/check-apk.sh`, which fails the build when:
 
 ## Releasing
 
-`tools/release.sh` gets the last build ready for a GitHub release and prints the `gh release create`
-command. It runs nothing on GitHub itself. It refuses a debug build, a build with another update
-URL, and an `echod` built from a techo5 checkout with uncommitted changes or from a commit that is
-not on GitHub.
+`tools/release.sh` gets the last build ready for a GitHub release and prints the commands that
+release it. It runs nothing on GitHub itself. It refuses a debug build, a build with another update
+URL, and an `echod` built from a techo5 checkout with uncommitted changes, from a commit that is not
+on GitHub, or with another Go or NDK than `build-apk.sh` pins.
 
-It writes `build/release/techo5-panel-<code>.apk` and `build/release/version.json`:
+A release goes in this order:
+
+1. **Build** a release APK from a techo5 commit on GitHub (`main`, or a tag v1.3.0 or later):
+   `tools/build-apk.sh ../techo5`.
+2. **Run `tools/release.sh`.** It gets `build/release` ready and prints the techo5 tag for this
+   version, on the commit `echod` came from:
+
+   ```
+   git -C <techo5> tag panel-v0.1.<code> <commit> && git -C <techo5> push origin panel-v0.1.<code>
+   ```
+
+   Pushing it has techo5's CI build both libraries from that commit, with the same Go and NDK, and
+   attest them.
+3. **When CI has finished**, download its libraries as `release.sh` prints
+   (`gh run download --repo HuskerMinion/techo5 --name techo5-panel-v0.1.<code> --dir build/ci/panel-v0.1.<code>`)
+   and **run `tools/release.sh` again.** It compares each `lib/<abi>/libechod.so` in the APK with
+   CI's `SHA256SUMS` and refuses a release when they differ. When they match, it prints the
+   `gh attestation verify` commands for CI's two libraries and the `gh release create` command.
+4. **Check** the attestations and the signing certificate it prints, then **release** with the
+   printed command.
+
+It writes `build/release/techo5-panel-<code>.apk`, `build/release/version.json`, and `NOTICE` and
+`LICENSE` beside them:
 
 ```
 {
@@ -116,6 +145,6 @@ It writes `build/release/techo5-panel-<code>.apk` and `build/release/version.jso
 }
 ```
 
-Both go up as assets of one release, marked latest. The app reads
+All four go up as assets of one release, marked latest. The app reads
 `https://github.com/HuskerMinion/techo5-panel/releases/latest/download/version.json` and then the APK
 named there.
