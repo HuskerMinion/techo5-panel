@@ -21,7 +21,8 @@ import java.nio.charset.StandardCharsets;
  * what each is.
  *
  * Volume: echod sends "volume <step> <steps>" whenever its level changes, and Android's media volume is
- * set to match, so the tablet's own buttons and slider show the level Home Assistant does. When
+ * set to match, so the tablet's own buttons and slider show the level Home Assistant does. A ring
+ * sends its own step while it sounds and the level before it after, and muted is never sent as zero. When
  * something else moves the media volume (the buttons, the slider), the new level goes back as
  * "volume <step>".
  *
@@ -103,6 +104,9 @@ final class ControlLink {
                 int step = Integer.parseInt(w[1]);
                 steps = Math.max(1, Integer.parseInt(w[2]));
                 int index = Math.round((float) step / steps * maxIndex());
+                // echod keeps mute and the lowest steps itself, over a speaker that stays on (so a ring on a
+                // muted tablet is heard): any step above zero is at least Android's first.
+                if (step > 0) index = Math.max(index, 1);
                 synchronized (lock) {
                     own.set(index, android.os.SystemClock.elapsedRealtime());
                 }
