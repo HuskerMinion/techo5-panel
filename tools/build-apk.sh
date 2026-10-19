@@ -29,6 +29,9 @@ ABIS="arm64-v8a armeabi-v7a"
 # The app's minSdkVersion (Android 8.0: the foreground service and its notification channel need it).
 # The NDK compiler is picked for the same API level, and d8 builds for it.
 API=26
+# The wake word models the APK carries, each as <name>.tflite and <name>.json: the Echos' own set
+# (techo5's tools/fetch-inputs.py), and nothing else that happens to be in the folder.
+MODEL_NAMES="okay_nabu hey_jarvis hey_mycroft alexa computer jarvis hey_friday glados hal terminator marvin home_assistant"
 
 here=$(cd "$(dirname "$0")/.." && pwd)
 techo5=${1:-${TECHO5:-$here/../techo5}}
@@ -166,9 +169,17 @@ EOJ
 # The wake word models the Echos' images carry, as assets: the app puts any a tablet does not have
 # yet in place before echod starts, as the Echos' boot does. techo5's tools/fetch-inputs.py fetches them.
 models=${MODELS:-$techo5/inputs/models}
-ls "$models"/*.tflite >/dev/null 2>&1 || die "no wake word models in $models (run techo5's tools/fetch-inputs.py, or set MODELS)"
 mkdir -p "$out/apk/assets/models"
-cp "$models"/*.tflite "$models"/*.json "$out/apk/assets/models/"
+for m in $MODEL_NAMES; do
+	for ext in tflite json; do
+		[ -f "$models/$m.$ext" ] || die "no $m.$ext in $models (run techo5's tools/fetch-inputs.py, or set MODELS)"
+		cp "$models/$m.$ext" "$out/apk/assets/models/"
+	done
+done
+
+# The licenses go in the APK with what they cover.
+cp "$here/NOTICE" "$out/apk/assets/NOTICE"
+cp "$here/LICENSE" "$out/apk/assets/LICENSE"
 
 echo "== manifest and resources ($name)"
 mkdir -p "$out/res"

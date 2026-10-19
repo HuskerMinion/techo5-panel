@@ -5,7 +5,8 @@ Android as lib/arm64-v8a/libechod.so and lib/armeabi-v7a/libechod.so, and the wa
 assets/models. The entries below are carried from techo5's NOTICE for what the APK ships. The other
 Go modules compiled into echod are listed in techo5's echod/go.mod, each under its own license,
 which comes with its source. The app's own code (app/) is this repository's, under the MIT License
-in LICENSE.
+in LICENSE. This file and LICENSE are in the APK too, as assets/NOTICE and assets/LICENSE, and
+beside the APK in each release.
 
 echod
   Derived from EchoLocal, https://github.com/ygelfand/echolocal
@@ -121,6 +122,13 @@ Wake word models (embedded in the daemon)
   re-implemented by openWakeWord; the melspectrogram model is a fixed-parameter implementation of
   Torch's melspectrogram, not a trained model. openWakeWord's CC BY-NC-SA 4.0 terms cover its six
   pre-trained wake words, which TECHO5 does not ship — the wake words below come from elsewhere.
+
+Person detection model (embedded in the daemon)
+  echod/internal/feature/person/assets/person_detect.tflite — Apache License 2.0
+  TensorFlow Lite Micro's person detection example, https://github.com/tensorflow/tflite-micro,
+  tensorflow/lite/micro/models/person_detect.tflite at commit
+  aeac6f39e5c7475cea20c54e86d41e3a38312546: an int8 MobileNet v1 trained on the Visual Wake Words
+  dataset. Unchanged.
 
 Wake word models (in the APK, assets/models)
   okay_nabu, hey_jarvis, hey_mycroft, alexa — Apache License 2.0

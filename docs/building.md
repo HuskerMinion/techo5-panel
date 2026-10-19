@@ -37,7 +37,8 @@ python3 tools/fetch-inputs.py
 ```
 
 It fetches the Echos' other build inputs too; the panel uses only `inputs/models`. Set `MODELS` to
-use another folder.
+use another folder. The build takes the twelve models below by name, each as `<name>.tflite` and
+`<name>.json`, and nothing else in the folder.
 
 Their licenses: okay_nabu, hey_jarvis, hey_mycroft and alexa are Apache 2.0, from
 [esphome/micro-wake-word-models](https://github.com/esphome/micro-wake-word-models). computer,
@@ -93,7 +94,8 @@ Every build runs `tools/check-apk.sh`, which fails the build when:
   paths. `aapt2 link -A` on Windows stores asset paths like `assets/models\alexa.tflite`, so the
   build adds the assets with `jar` instead, which always writes `/`.)
 - `lib/arm64-v8a/libechod.so` or `lib/armeabi-v7a/libechod.so` is missing.
-- the wake word models are missing.
+- `assets/models` holds anything but the twelve wake word models (each `.tflite` and `.json`).
+- `assets/NOTICE` or `assets/LICENSE` is missing. Both go in the APK, and beside it in each release.
 - a release build is debuggable.
 
 ## Releasing
