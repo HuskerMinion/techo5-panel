@@ -26,8 +26,9 @@ set -eu
 PUBLIC_UPDATE_URL=https://github.com/HuskerMinion/techo5-panel/releases/latest/download
 # Both ABIs: arm64 for 64-bit tablets, armv7 for the 32-bit ones (Fire OS) and Androids before 64-bit.
 ABIS="arm64-v8a armeabi-v7a"
-# The app's minSdkVersion (Android 7.1). The NDK compiler is picked for the same API level.
-API=25
+# The app's minSdkVersion (Android 8.0: the foreground service and its notification channel need it).
+# The NDK compiler is picked for the same API level, and d8 builds for it.
+API=26
 
 here=$(cd "$(dirname "$0")/.." && pwd)
 techo5=${1:-${TECHO5:-$here/../techo5}}

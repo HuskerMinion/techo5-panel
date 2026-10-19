@@ -17,7 +17,7 @@ tablet's display. Home Assistant adds it as an ESPHome device.
 | Samsung Galaxy Tab S6 Lite (SM-P613) | Android 14 |
 | Meta Portal, 2nd gen (10") | Android 10 |
 
-**May work, untested:** other ARM tablets (64-bit or 32-bit) with Android 7.1 or later. If you try
+**May work, untested:** other ARM tablets (64-bit or 32-bit) with Android 8.0 or later. If you try
 one, an issue saying how it went is welcome.
 
 ## What it needs

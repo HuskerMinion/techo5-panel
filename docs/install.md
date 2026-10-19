@@ -158,7 +158,7 @@ PIN. Leave the registry value in place.
 
 ## Other tablets (may work, untested)
 
-Any ARM tablet with Android 7.1 or later may work. Turn on USB debugging, do the steps under
+Any ARM tablet with Android 8.0 or later may work. Turn on USB debugging, do the steps under
 [Every device](#every-device-the-app-itself), and make TECHO5 Panel the home app in Android's
 settings. On Android 11 and older, turn HomeGuard on so update prompts are answered. If you try one,
 please open an issue saying how it went.

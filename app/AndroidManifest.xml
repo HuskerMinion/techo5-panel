@@ -3,7 +3,7 @@
     package="app.techo5.panel">
     <!-- versionCode and versionName are stamped by tools/build-apk.sh. -->
 
-    <uses-sdk android:minSdkVersion="25" android:targetSdkVersion="34" />
+    <uses-sdk android:minSdkVersion="26" android:targetSdkVersion="34" />
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />

@@ -42,4 +42,4 @@ announcements and settings like any other unit. No root needed.
 | Samsung Galaxy Tab S6 Lite (SM-P613) | Android 14 | TECHO5 Panel as the home app; silent updates |
 | Meta Portal (2nd gen, 10") | Android 10 | Official ADB; the microphone works while the panel is on the screen |
 
-Other ARM tablets with Android 7.1 or later may work, untested. See [install.md](install.md).
+Other ARM tablets with Android 8.0 or later may work, untested. See [install.md](install.md).
