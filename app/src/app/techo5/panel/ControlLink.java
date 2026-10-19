@@ -93,7 +93,7 @@ final class ControlLink {
             } catch (IOException e) {
                 if (svc.stopping()) return;
                 Log.w(TAG, "control socket: " + e.getMessage());
-                ScreenLink.pause();
+                if (!ScreenLink.pause()) return;
                 continue;
             }
             try (LocalSocket conn = accepted) {

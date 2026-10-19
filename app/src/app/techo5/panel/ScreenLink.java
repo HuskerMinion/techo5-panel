@@ -92,7 +92,7 @@ final class ScreenLink {
             } catch (IOException e) {
                 if (svc.stopping()) return;
                 Log.w(TAG, "screen socket: " + e.getMessage());
-                pause();
+                if (!pause()) return;
                 continue;
             }
             try (LocalSocket c = conn) {
@@ -109,12 +109,18 @@ final class ScreenLink {
         }
     }
 
-    /** A second between tries at a socket that failed for a reason of its own, so it is not a busy loop. */
-    static void pause() {
+    /**
+     * A second between tries at a socket that failed for a reason of its own, so it is not a busy loop.
+     * False when the thread was interrupted: the flag stays set, so every sleep after it would return at
+     * once, and the caller's loop ends instead.
+     */
+    static boolean pause() {
         try {
             Thread.sleep(1000);
+            return true;
         } catch (InterruptedException ignored) {
             Thread.currentThread().interrupt();
+            return false;
         }
     }
 
