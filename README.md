@@ -37,8 +37,9 @@ then follow [docs/install.md](docs/install.md) for your device. In short: turn o
 `adb install` the APK, allow the microphone, and add it in Home Assistant within 15 minutes of its
 first start.
 
-Updates come by themselves after that. The app checks the latest release a minute after it starts,
-every six hours, and when you press Install on its update card in Home Assistant.
+After that it keeps itself up to date. It checks the latest release a minute after it starts and
+every six hours, and its update card in Home Assistant shows what is new. It installs an update when
+you press **Install** on that card, or by itself at night with **Install updates automatically** on.
 
 ## Docs
 

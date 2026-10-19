@@ -1,6 +1,7 @@
 # Installing TECHO5 Panel
 
-All three devices take the same APK. You install it once over adb. After that it updates itself.
+All three devices take the same APK. You install it once over adb. After that it updates itself
+from its releases (see [Updates](#updates)).
 
 The commands are the same on Windows, Linux and macOS. On Windows, run them in PowerShell from the
 folder with `adb.exe` in it, or put that folder on your PATH.
@@ -181,10 +182,13 @@ which does not cross subnets or VLANs on its own.
 
 ## Updates
 
-The app checks this repo's latest release a minute after it starts, every six hours, and when you
-press **Install** on its update card in Home Assistant. A newer build is downloaded, checked
-against its sha256 and installed. Android only takes an update signed with the same key as the app
-already there.
+The app checks this repo's latest release a minute after it starts, every six hours, and when Home
+Assistant asks. A check only looks: the update card in Home Assistant shows the newer version.
+
+The update installs when you press **Install** on that card. With **Install updates automatically**
+on, it also installs by itself between 2 and 5 am, when nothing is playing or ringing, as on an Echo.
+The newer build is downloaded, checked against its sha256 and installed. Android only takes an
+update signed with the same key as the app already there, and never an older version.
 
 ## Looking at the logs
 
