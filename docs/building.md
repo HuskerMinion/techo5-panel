@@ -1,7 +1,8 @@
 # Building TECHO5 Panel
 
 `tools/build-apk.sh` builds the APK with the Android SDK's own tools. There is no Gradle. It builds
-`echod` from a techo5 checkout for both ABIs, compiles the app, packs it and signs it.
+`echod` from a techo5 checkout for both ABIs (or packs CI's, for a release), compiles the app, packs it
+and signs it.
 
 ## What you need
 
@@ -19,10 +20,11 @@
   v1.3.0 or later. Those have the panel build (the `panel` Go build tag and
   `echod/internal/layout/device_panel.go`).
 
-Go and the NDK are pinned so `echod` comes out byte for byte as techo5's CI builds it from the same
-commit (see [Releasing](#releasing)). The two versions are `GO_VERSION` and `NDK_VERSION` at the top
-of `tools/build-apk.sh`, the same as the panel job in techo5's `.github/workflows/build.yml`. A
-release build refuses any other Go or NDK. A debug build prints a warning and goes on.
+Go and the NDK are pinned to the versions techo5's CI builds the released `echod` with, so a build
+here is as near it as a build on another machine gets. The two versions are `GO_VERSION` and
+`NDK_VERSION` at the top of `tools/build-apk.sh`, the same as the panel job in techo5's
+`.github/workflows/build.yml`. With any other Go or NDK the build prints a warning and goes on. A
+release carries CI's own libraries, not these (see [Releasing](#releasing)).
 
 With the SDK's `sdkmanager`:
 
@@ -89,9 +91,12 @@ Other settings, all from the environment:
 | `PANEL_UPDATE_URL` | Where the app updates from. Default: this repo's latest release. A fork sets its own `https://` URL, or `none` for no updates. Plain `http` is refused: the app allows no cleartext traffic. |
 | `MODELS` | The wake word models folder. |
 | `ANDROID_PLATFORM` | The platform to build against, like `android-34`. |
+| `PREBUILT_LIBS` | A folder of `echod` libraries to pack instead of building them (`libechod-<abi>.so` and `SHA256SUMS`, as techo5's CI makes them). How a release is built: `tools/release.sh` fills `build/ci/<tag>`. Not with `DEBUG=1`. |
+| `VERSION_CODE` | With `PREBUILT_LIBS`, the version the libraries were stamped with, when the folder has no `version-code` file. |
 
 The version is the number of minutes since 2026-01-01 UTC, so every build is newer than the last.
-It shows as `0.1.<minutes>` in the app, on the screen and in Home Assistant.
+It shows as `0.1.<minutes>` in the app, on the screen and in Home Assistant. A release build takes the
+version `release.sh` planned, which CI stamped into its libraries.
 
 ## Checks
 
@@ -104,34 +109,52 @@ Every build runs `tools/check-apk.sh`, which fails the build when:
 - `assets/models` holds anything but the twelve wake word models (each `.tflite` and `.json`).
 - `assets/NOTICE` or `assets/LICENSE` is missing. Both go in the APK, and beside it in each release.
 - a release build is debuggable.
+- with `PREBUILT_LIBS`, a `lib/<abi>/libechod.so` is not the library the folder's `SHA256SUMS`
+  lists. `release.sh` runs the same check against the attested sums before a release.
 
 ## Releasing
 
-`tools/release.sh` gets the last build ready for a GitHub release and prints the commands that
-release it. It runs nothing on GitHub itself. It refuses a debug build, a build with another update
-URL, and an `echod` built from a techo5 checkout with uncommitted changes, from a commit that is not
-on GitHub, or with another Go or NDK than `build-apk.sh` pins.
+A release does not carry an `echod` built here. A library built on another machine never comes out
+byte for byte as CI's: the C compiler's path is in Go's build ID, and the NDK is built for a
+different host on Windows than on CI's Linux. So, like the Echos' images, a release carries the two
+libraries techo5's CI built and attested from a tagged commit, and `build-apk.sh` packs them as they
+are (`PREBUILT_LIBS`). Local builds are for development.
 
-A release goes in this order:
+`tools/release.sh` takes a release a step per run. It needs [GitHub's CLI](https://cli.github.com/)
+(`gh`), signed in. It only reads from GitHub: it downloads CI's libraries and checks their
+attestations, and prints the tag and release commands for you to run.
 
-1. **Build** a release APK from a techo5 commit on GitHub (`main`, or a tag v1.3.0 or later):
-   `tools/build-apk.sh ../techo5`.
-2. **Run `tools/release.sh`.** It gets `build/release` ready and prints the techo5 tag for this
-   version, on the commit `echod` came from:
+1. **Plan it: `tools/release.sh ../techo5`.** The techo5 checkout has to be committed and its commit
+   on GitHub (`main`, or a tag v1.3.0 or later). It picks the version, writes `build/release-plan`,
+   and prints the techo5 tag for it:
 
    ```
    git -C <techo5> tag panel-v0.1.<code> <commit> && git -C <techo5> push origin panel-v0.1.<code>
    ```
 
-   Pushing it has techo5's CI build both libraries from that commit, with the same Go and NDK, and
+   Pushing it has techo5's CI build both libraries from that commit, stamped with that version, and
    attest them.
-3. **When CI has finished**, download its libraries as `release.sh` prints
-   (`gh run download --repo HuskerMinion/techo5 --name techo5-panel-v0.1.<code> --dir build/ci/panel-v0.1.<code>`)
-   and **run `tools/release.sh` again.** It compares each `lib/<abi>/libechod.so` in the APK with
-   CI's `SHA256SUMS` and refuses a release when they differ. When they match, it prints the
-   `gh attestation verify` commands for CI's two libraries and the `gh release create` command.
-4. **Check** the attestations and the signing certificate it prints, then **release** with the
-   printed command.
+2. **When CI has finished, run `tools/release.sh` again.** It finds the tag's run, refuses one that
+   failed or built another commit, downloads its libraries into `build/ci/panel-v0.1.<code>`
+   (`gh run download`), checks each against CI's `SHA256SUMS`, and runs
+   `gh attestation verify` on both (`--repo HuskerMinion/techo5 --source-ref refs/tags/<tag>
+   --signer-workflow HuskerMinion/techo5/.github/workflows/build.yml`). Only when both verify does it
+   write `build/ci/<tag>/attested` and print the build command:
+
+   ```
+   KEYSTORE=<release key> KEYSTORE_PASS_FILE=<its password file> PREBUILT_LIBS=build/ci/panel-v0.1.<code> tools/build-apk.sh ../techo5
+   ```
+
+   With `PREBUILT_LIBS`, nothing is compiled for `echod`: the libraries go in as
+   `lib/<abi>/libechod.so`, the APK takes the version in the tag, and `check-apk.sh` confirms the
+   packed libraries are the ones `SHA256SUMS` lists. The checkout is only read for the wake word
+   models.
+3. **Run `tools/release.sh` again.** It refuses a debug build, a build with another update URL or
+   version, and a build that does not carry those libraries; `check-apk.sh` then confirms each
+   `lib/<abi>/libechod.so` in the APK has the sha256 that was attested. It writes `build/release`
+   and prints the signing certificate and the `gh release create` command.
+4. **Check** the signing certificate, then **release** with the printed command. The next release
+   starts with `tools/release.sh new ../techo5`.
 
 It writes `build/release/techo5-panel-<code>.apk`, `build/release/version.json`, and `NOTICE` and
 `LICENSE` beside them:
