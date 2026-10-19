@@ -16,6 +16,8 @@ public class UpdateReceiver extends BroadcastReceiver {
     public void onReceive(Context ctx, Intent i) {
         int status = i.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
         if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
+            // The prompt this brings up is the committed update's, however long after the commit.
+            Updater.promptComing();
             Intent confirm = i.getParcelableExtra(Intent.EXTRA_INTENT);
             if (confirm != null) ctx.startActivity(confirm.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             return;

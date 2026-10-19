@@ -83,10 +83,11 @@ public class HomeGuard extends AccessibilityService {
     /**
      * The confirmation Android shows for an update installed by something other than a store: pressed
      * only when it is an update to this app, the one Updater asked for: within a minute of Updater's own
-     * commit, naming this app, and saying it is an update rather than a new install. Two layouts: AOSP's
-     * screen (Fire OS: app_name, ok_button) and the dialog newer Android shows (alertTitle, button1).
-     * Android keeps the button disabled for a moment after the prompt appears, so tapping too soon is
-     * not possible; it is tried again for a few seconds.
+     * commit or of the installer asking for it to be confirmed (Updater.promptComing), naming this app,
+     * and saying it is an update rather than a new install. Two layouts: AOSP's screen (Fire OS:
+     * app_name, ok_button) and the dialog newer Android shows (alertTitle, button1). Android keeps the
+     * button disabled for a moment after the prompt appears, so tapping too soon is not possible; it is
+     * tried again for a few seconds.
      *
      * Android 12 and later install the update without a prompt (see Updater), which matters: Android 14
      * hides the installer's buttons from accessibility services that are not assistive tools.

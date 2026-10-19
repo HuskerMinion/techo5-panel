@@ -49,7 +49,8 @@ final class Updater {
     private static volatile long pendingCode, pendingAt;
 
     // When this app last committed an update of its own (elapsedRealtime, 0 for never), for HomeGuard:
-    // it presses Install on an update prompt only this soon after.
+    // it presses Install on an update prompt only this soon after. The installer asking for that update
+    // to be confirmed starts it again (promptComing).
     private static final long PROMPT_WINDOW_MS = 60_000;
     private static volatile long committedAt;
 
@@ -76,10 +77,19 @@ final class Updater {
         }
     }
 
-    /** Whether this app committed an update of its own in the last minute, so a prompt now is for it. */
+    /** Whether this app's own update was committed, or its prompt asked for, in the last minute. */
     static boolean justCommitted() {
         long at = committedAt;
         return at != 0 && SystemClock.elapsedRealtime() - at < PROMPT_WINDOW_MS;
+    }
+
+    /**
+     * The installer asked for the committed update to be confirmed (UpdateReceiver), which can come well
+     * after the commit: overnight, the prompt waits until the tablet allows it. The minute HomeGuard
+     * presses Install in starts again from now, while that update is still pending.
+     */
+    static void promptComing() {
+        if (pendingCode != 0) committedAt = SystemClock.elapsedRealtime();
     }
 
     /** The installer said how the committed update ended: it may be tried again. */
