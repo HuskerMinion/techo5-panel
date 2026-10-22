@@ -304,14 +304,17 @@ public class PanelService extends Service {
         String which = readSetting("mic-source");
         if (!"vc".equals(which) && !"mic".equals(which)) which = "";
         int stalls = 0;
+        int tries = 0;
         boolean refused = false;
         long refusedSince = 0;
         while (!stopping) {
             String using = which;
             if (using.isEmpty() && stalls >= 2) using = "mic";
-            // Said for the first few tries only: a microphone that never hands anything over would
-            // otherwise fill the log every few seconds for as long as the panel runs.
-            boolean say = stalls <= 3 || stalls % 100 == 0;
+            // Said for the first few tries only: a microphone that never hands anything over, or that
+            // Android keeps refusing, would otherwise fill the log every few seconds for as long as the
+            // panel runs.
+            tries++;
+            boolean say = tries <= 3 || tries % 100 == 0;
             AudioRecord rec = open(using, say);
             rec.startRecording();
             int state = rec.getRecordingState();
@@ -337,6 +340,7 @@ public class PanelService extends Service {
             }
             if (record(rec, out)) {
                 stalls = 0;
+                tries = 0;
             } else {
                 stalls++;
                 if (say) {
@@ -411,7 +415,16 @@ public class PanelService extends Service {
                 int n = rec.read(buf, 0, buf.length);
                 if (stalled.get()) break;
                 if (n < 0) throw new IOException("AudioRecord.read returned " + n);
-                if (n == 0) continue;
+                if (n == 0) {
+                    // Nothing yet: a short pause, so a read that keeps coming back empty does not spin.
+                    try {
+                        Thread.sleep(10);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    continue;
+                }
                 lastData.set(System.currentTimeMillis());
                 if (first) {
                     first = false;
