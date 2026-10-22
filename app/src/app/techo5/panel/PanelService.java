@@ -38,6 +38,8 @@ import java.net.InterfaceAddress;
 import java.net.NetworkInterface;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Keeps echod running and hands it the microphone and the speaker.
@@ -280,13 +282,76 @@ public class PanelService extends Service {
         }
     }
 
+    /** How long Android may hand over nothing at all before the recording is started again. */
+    private static final long MIC_STALL_MS = 3000;
+    /** How long between tries while Android will not start the microphone. */
+    private static final long MIC_RETRY_MS = 2000;
+
+    /**
+     * Records for as long as echod is connected. Android can refuse to start a recording that it let
+     * the app set up (from Android 11 a service started at boot may not record until the app has been
+     * in front, and before Android 10 another app recording first refuses it), and it says so only in
+     * the recording state: read() then waits forever and echod hears nothing, not even silence. So the
+     * state is checked, the refusal logged, and the start tried again; silence goes to echod meanwhile,
+     * which its own log reports as a microphone taken away. A recording that starts and then hands over
+     * nothing for MIC_STALL_MS is started again too, and the default source gives way to the plain
+     * microphone after two of those.
+     */
     private void stream(OutputStream out) throws IOException {
-        int size = Math.max(AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO,
-                AudioFormat.ENCODING_PCM_16BIT), FRAME * 2 * 8);
         // Which capture path, for measuring: files/mic-source holds "vc" for voice communication, which
         // turns on the platform's own echo canceller where it has one, or "mic" for the raw microphone;
         // anything else is voice recognition, Android's path for speech to text.
         String which = readSetting("mic-source");
+        if (!"vc".equals(which) && !"mic".equals(which)) which = "";
+        int stalls = 0;
+        boolean refused = false;
+        long refusedSince = 0;
+        while (!stopping) {
+            String using = which;
+            if (using.isEmpty() && stalls >= 2) using = "mic";
+            // Said for the first few tries only: a microphone that never hands anything over would
+            // otherwise fill the log every few seconds for as long as the panel runs.
+            boolean say = stalls <= 3 || stalls % 100 == 0;
+            AudioRecord rec = open(using, say);
+            rec.startRecording();
+            int state = rec.getRecordingState();
+            if (state != AudioRecord.RECORDSTATE_RECORDING) {
+                rec.release();
+                if (!refused) {
+                    refused = true;
+                    refusedSince = System.currentTimeMillis();
+                    Log.w(TAG, "Android would not start the microphone (recording state " + state + ", source "
+                            + (using.isEmpty() ? "vr" : using) + ", Android " + Build.VERSION.RELEASE + " API "
+                            + Build.VERSION.SDK_INT + "): it may want the panel in front first, or another app"
+                            + " has the microphone; trying again every " + MIC_RETRY_MS / 1000 + " seconds");
+                }
+                askForMic();
+                bringPanelForward();
+                silence(out, MIC_RETRY_MS);
+                continue;
+            }
+            if (refused) {
+                refused = false;
+                Log.i(TAG, "Android started the microphone after "
+                        + (System.currentTimeMillis() - refusedSince) / 1000 + " seconds");
+            }
+            if (record(rec, out)) {
+                stalls = 0;
+            } else {
+                stalls++;
+                if (say) {
+                    Log.w(TAG, "Android handed over nothing from the microphone for " + MIC_STALL_MS / 1000
+                            + " seconds (source " + (using.isEmpty() ? "vr" : using) + ", " + stalls
+                            + " times now), starting it again");
+                }
+            }
+        }
+    }
+
+    /** An AudioRecord for the source (see stream), not yet started. */
+    private AudioRecord open(String which, boolean say) throws IOException {
+        int size = Math.max(AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO,
+                AudioFormat.ENCODING_PCM_16BIT), FRAME * 2 * 8);
         int source = MediaRecorder.AudioSource.VOICE_RECOGNITION;
         if ("vc".equals(which)) source = MediaRecorder.AudioSource.VOICE_COMMUNICATION;
         if ("mic".equals(which)) source = MediaRecorder.AudioSource.MIC;
@@ -298,28 +363,108 @@ public class PanelService extends Service {
             throw new IOException("AudioRecord did not initialize (is the microphone permission granted?)");
         }
         int session = rec.getAudioSessionId();
-        Log.i(TAG, "capture source " + (which.isEmpty() ? "vr" : which)
+        if (say) Log.i(TAG, "capture source " + (which.isEmpty() ? "vr" : which)
                 + ", platform AEC available=" + AcousticEchoCanceler.isAvailable()
-                + " AGC=" + AutomaticGainControl.isAvailable() + " NS=" + NoiseSuppressor.isAvailable());
+                + " AGC=" + AutomaticGainControl.isAvailable() + " NS=" + NoiseSuppressor.isAvailable()
+                + ", Android " + Build.VERSION.RELEASE + " API " + Build.VERSION.SDK_INT);
         if ("vc".equals(which) && AcousticEchoCanceler.isAvailable()) {
             AcousticEchoCanceler aec = AcousticEchoCanceler.create(session);
             if (aec != null) {
                 aec.setEnabled(true);
-                Log.i(TAG, "platform AEC enabled=" + aec.getEnabled());
+                if (say) Log.i(TAG, "platform AEC enabled=" + aec.getEnabled());
             }
         }
+        if (say) Log.i(TAG, "recording at " + RATE + " Hz, buffer " + size + " bytes");
+        return rec;
+    }
+
+    /**
+     * Hands a started recording to echod until echod goes away (an IOException) or Android stops
+     * handing anything over for MIC_STALL_MS (false). Releases the recording either way.
+     */
+    private boolean record(final AudioRecord rec, OutputStream out) throws IOException {
+        final AtomicLong lastData = new AtomicLong(System.currentTimeMillis());
+        final AtomicBoolean stalled = new AtomicBoolean();
+        // read() blocks, so a stall is noticed from beside it; stop() wakes a blocked read.
+        Thread watch = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    while (true) {
+                        Thread.sleep(500);
+                        if (System.currentTimeMillis() - lastData.get() >= MIC_STALL_MS) {
+                            stalled.set(true);
+                            rec.stop();
+                            return;
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    // The recording ended on its own.
+                }
+            }
+        }, "mic-watch");
+        watch.start();
         byte[] buf = new byte[FRAME * 2];
-        rec.startRecording();
-        Log.i(TAG, "recording at " + RATE + " Hz, buffer " + size + " bytes");
+        boolean first = true;
         try {
             while (!stopping) {
                 int n = rec.read(buf, 0, buf.length);
+                if (stalled.get()) break;
                 if (n < 0) throw new IOException("AudioRecord.read returned " + n);
+                if (n == 0) continue;
+                lastData.set(System.currentTimeMillis());
+                if (first) {
+                    first = false;
+                    Log.i(TAG, "the microphone is handing over sound");
+                }
                 out.write(buf, 0, n);
             }
         } finally {
-            rec.stop();
+            watch.interrupt();
+            try {
+                watch.join();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            try {
+                rec.stop();
+            } catch (IllegalStateException ignored) {
+            }
             rec.release();
+        }
+        return !stalled.get();
+    }
+
+    /** Writes ms of silence to echod at the pace of the microphone, so it hears that rather than nothing. */
+    private void silence(OutputStream out, long ms) throws IOException {
+        byte[] zeros = new byte[FRAME * 2];
+        for (long t = 0; t < ms && !stopping; t += 20) {
+            out.write(zeros);
+            try {
+                Thread.sleep(20);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    private long broughtForward;
+
+    /**
+     * Puts the panel's screen in front, at most once every half minute: from Android 11 a service
+     * started at boot may record only once the app has been in front, and the screen starts the service
+     * again from there (MainActivity.onResume).
+     */
+    private void bringPanelForward() {
+        long now = System.currentTimeMillis();
+        if (now - broughtForward < 30000) return;
+        broughtForward = now;
+        try {
+            startActivity(new Intent(this, MainActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
+        } catch (RuntimeException e) {
+            Log.w(TAG, "could not bring the panel forward: " + e.getMessage());
         }
     }
 
