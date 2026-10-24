@@ -65,6 +65,8 @@ public class PanelService extends Service {
     private LocalServerSocket speakerServer;
     private LocalServerSocket screenServer;
     private LocalServerSocket controlServer;
+    private BleLink ble;
+    private GattLink gatt;
     private volatile Process daemon;
     private Notification notification;
     private ConnectivityManager.NetworkCallback networkWatch;
@@ -152,6 +154,22 @@ public class PanelService extends Service {
         } catch (IOException e) {
             Log.e(TAG, "control socket", e);
         }
+        try {
+            ble = new BleLink(this);
+            new Thread(new Runnable() {
+                @Override public void run() { ble.serve(); }
+            }, "ble").start();
+        } catch (IOException e) {
+            Log.e(TAG, "ble socket", e);
+        }
+        try {
+            gatt = new GattLink(this, ble);
+            new Thread(new Runnable() {
+                @Override public void run() { gatt.serve(); }
+            }, "gatt").start();
+        } catch (IOException e) {
+            Log.e(TAG, "gatt socket", e);
+        }
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -209,6 +227,8 @@ public class PanelService extends Service {
             }
         }
         if (control != null) control.close();
+        if (ble != null) ble.close();
+        if (gatt != null) gatt.close();
         try {
             if (micServer != null) micServer.close();
             if (speakerServer != null) speakerServer.close();

@@ -25,6 +25,7 @@ import android.widget.TextView;
  */
 public class MainActivity extends Activity implements ScreenLink.Viewer {
     private static final int ASK_MIC = 1;
+    private static final int ASK_BLE = 2;
     // HomeGuard answers a microphone prompt only this soon after this screen asked for one.
     private static final long ASK_WINDOW_MS = 30_000;
     private static volatile long askedForMicAt;
@@ -33,6 +34,7 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
     private Handler touches;
     private PanelView view;
     private TextView text;
+    private boolean askedForBle;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -53,13 +55,22 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
             return;
         }
         start();
+        askForBle();
     }
 
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
+        if (code == ASK_BLE) {
+            // Android 12+ needs a second prompt after location; declined access leaves voice intact.
+            for (int result : results) if (result != PackageManager.PERMISSION_GRANTED) return;
+            askedForBle = false;
+            askForBle();
+            return;
+        }
         if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
             if (view != null) return; // asked again while running: the service picks the microphone back up
             start();
+            askForBle();
         } else if (text != null) {
             text.setText("Without the microphone there is no wake word. Allow it in Settings > Apps.");
         }
@@ -68,6 +79,21 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
     private void askForMic() {
         askedForMicAt = android.os.SystemClock.elapsedRealtime();
         requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, ASK_MIC);
+    }
+
+    private void askForBle() {
+        if (askedForBle) return;
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            askedForBle = true;
+            requestPermissions(new String[] {Manifest.permission.ACCESS_FINE_LOCATION}, ASK_BLE);
+        } else if (android.os.Build.VERSION.SDK_INT >= 31 &&
+                (checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED ||
+                 checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED)) {
+            askedForBle = true;
+            requestPermissions(new String[] {Manifest.permission.BLUETOOTH_SCAN,
+                    Manifest.permission.BLUETOOTH_CONNECT}, ASK_BLE);
+        }
     }
 
     /** Whether this screen asked for the microphone in the last half minute, so a prompt now is its own. */
