@@ -116,6 +116,10 @@ final class ControlLink {
     }
 
     private void handle(String[] w) {
+        if (w.length == 2 && w[0].equals("camera") && (w[1].equals("0") || w[1].equals("1"))) {
+            MainActivity.cameraSwitch(w[1].equals("1"));
+            return;
+        }
         if (w.length >= 2 && w[0].equals("update") && (w[1].equals("check") || w[1].equals("install"))) {
             boolean install = w[1].equals("install");
             Log.i(TAG, "updates: " + (install ? "an install" : "a check") + " was asked for");

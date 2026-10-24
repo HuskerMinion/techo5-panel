@@ -180,6 +180,13 @@ Assistant had the panel before loses it.
 If Home Assistant does not find it, check that both are on the same network: discovery uses mDNS,
 which does not cross subnets or VLANs on its own.
 
+## Camera (where the tablet has a front camera)
+
+**Camera streaming** is off by default. Turn it on in Home Assistant, then bring the TECHO5 Panel
+screen to the front to allow Android's camera prompt. The camera entity can appear before permission
+is granted, but it cannot show an image until you allow access. If you decline, switch Camera
+streaming off and on to ask again. Turning it off stops capture and discards any cached still.
+
 ## Updates
 
 The app checks this repo's latest release a minute after it starts, every six hours, and when Home
