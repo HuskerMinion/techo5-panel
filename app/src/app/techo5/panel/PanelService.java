@@ -69,6 +69,8 @@ public class PanelService extends Service {
     private Notification notification;
     private ConnectivityManager.NetworkCallback networkWatch;
     private ControlLink control;
+    private AdbControl adbControl;
+    private volatile boolean adbControlAvailable;
 
     @Override
     public void onCreate() {
@@ -82,6 +84,9 @@ public class PanelService extends Service {
                 .setOngoing(true)
                 .build();
         goForeground();
+        adbControl = new AdbControl(this);
+        adbControl.restoreAfterRestart();
+        adbControlAvailable = AdbControl.available(this);
 
         // The CPU stays up so the wake word keeps listening with the screen off, and multicast is let in
         // so Home Assistant can find the device over mDNS.
@@ -142,7 +147,7 @@ public class PanelService extends Service {
         }
         try {
             controlServer = new LocalServerSocket("techo5.ctl");
-            control = new ControlLink(this);
+            control = new ControlLink(this, adbControl);
             new Thread(new Runnable() {
                 @Override
                 public void run() {
@@ -164,6 +169,11 @@ public class PanelService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         goForeground();
+        boolean available = AdbControl.available(this);
+        if (available != adbControlAvailable) {
+            adbControlAvailable = available;
+            if (daemon != null) daemon.destroy(); // rebuild the ESPHome entity list after a grant/revoke
+        }
         return START_STICKY;
     }
 
@@ -622,6 +632,7 @@ public class PanelService extends Service {
                 ProcessBuilder pb = new ProcessBuilder(exe, "run").directory(files).redirectErrorStream(true);
                 pb.environment().put("HOME", files.getAbsolutePath());
                 pb.environment().put("TMPDIR", getCacheDir().getAbsolutePath());
+                if (adbControlAvailable) pb.environment().put("TECHO5_PANEL_ADB_CONTROL", "1");
                 daemon = pb.start();
                 Log.i(TAG, "echod started: " + exe);
                 // echod logs to logcat itself (tag techo5), so its console is only kept, not copied: the

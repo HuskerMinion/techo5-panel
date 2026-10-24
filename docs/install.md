@@ -190,6 +190,29 @@ on, it also installs by itself between 2 and 5 am, when nothing is playing or ri
 The newer build is downloaded, checked against its sha256 and installed. Android only takes an
 update signed with the same key as the app already there, and never an older version.
 
+## Link View ADB debugging switch
+
+On the tested JBL Link View running Android Things 8.1, a Home Assistant diagnostic switch can
+control Android's ADB setting. Android uses one setting for both USB and Wi-Fi ADB, so turning the
+switch off closes both. It is offered only when this build identity already listens on TCP port
+5555 and you explicitly grant the app Android's development-only settings permission:
+
+```sh
+adb shell pm grant app.techo5.panel android.permission.WRITE_SECURE_SETTINGS
+```
+
+Restart TECHO5 Panel after the grant so Home Assistant discovers the switch. The app reports the
+actual Android ADB state rather than restoring a saved switch value. If TECHO5 turned ADB off and
+its service restarts, it turns ADB on to preserve a recovery path. If both Home Assistant and ADB
+are unreachable while the switch is off, use the device's physical recovery procedure. To remove
+the grant, first turn ADB on, then run:
+
+```sh
+adb shell pm revoke app.techo5.panel android.permission.WRITE_SECURE_SETTINGS
+```
+
+Restart the app afterward. No other Panel model is offered this control.
+
 ## Looking at the logs
 
 ```

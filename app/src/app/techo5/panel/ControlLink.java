@@ -31,12 +31,17 @@ import java.nio.charset.StandardCharsets;
  * installs a newer build if there is one. The app's Updater does both, since the app is what gets
  * updated. "update <running> <offered>" goes back after every check and whenever echod connects, for
  * Home Assistant's update card.
+ *
+ * ADB: "adb status" asks for Android's current enabled state; "adb 0" and "adb 1" change it only
+ * on a tested Link View with the development-only settings permission granted. "adb <state> <ready>"
+ * goes back after every request and control-line reconnection.
  */
 final class ControlLink {
     private static final String TAG = "techo5-panel";
 
     private final AudioManager audio;
     private final Updater updater;
+    private final AdbControl adb;
     private final Context ctx;
     // The link echod is on, for the Updater's reports; one service, so one link.
     private static volatile ControlLink live;
@@ -48,9 +53,10 @@ final class ControlLink {
     private final OwnLevels own = new OwnLevels();
     private final BroadcastReceiver moved;
 
-    ControlLink(Context ctx) {
+    ControlLink(Context ctx, AdbControl adb) {
         audio = ctx.getSystemService(AudioManager.class);
         updater = new Updater(ctx);
+        this.adb = adb;
         this.ctx = ctx.getApplicationContext();
         live = this;
         // The application context: the service that makes this can be killed and made again, and a
@@ -103,6 +109,7 @@ final class ControlLink {
                     out = conn.getOutputStream();
                 }
                 send(Updater.report(ctx));
+                sendAdbStatus();
                 BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
                 for (String line; (line = in.readLine()) != null; ) handle(line.trim().split("\\s+"));
             } catch (IOException e) {
@@ -116,6 +123,13 @@ final class ControlLink {
     }
 
     private void handle(String[] w) {
+        if (w.length >= 2 && w[0].equals("adb")) {
+            if (w[1].equals("0") || w[1].equals("1")) {
+                if (!adb.set(w[1].equals("1"))) Log.w(TAG, "ADB change refused or unavailable");
+            }
+            sendAdbStatus();
+            return;
+        }
         if (w.length >= 2 && w[0].equals("update") && (w[1].equals("check") || w[1].equals("install"))) {
             boolean install = w[1].equals("install");
             Log.i(TAG, "updates: " + (install ? "an install" : "a check") + " was asked for");
@@ -139,6 +153,11 @@ final class ControlLink {
             } catch (NumberFormatException ignored) {
             }
         }
+    }
+
+    private void sendAdbStatus() {
+        send("adb " + (adb.enabled() ? "1" : "0") + " " +
+                (AdbControl.available(ctx) ? "1" : "0"));
     }
 
     /** Sends a line to echod if it is connected; a later connection is brought up to date on its own. */
