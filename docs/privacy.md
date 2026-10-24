@@ -31,7 +31,9 @@ running TECHO5:
 | 1900 (UDP) | DLNA discovery, so a phone app can cast audio to the panel. | While DLNA is on |
 | 5060 (UDP) or 5061 (TLS) | SIP calls. A call rings only when it comes from your provider. | While a SIP account is set |
 
-There is no camera stream on a panel (8554 on an Echo with a camera), no SSH and no remote adb.
+TECHO5 Panel opens no SSH or ADB port. On the tested Link View, an optional Home Assistant switch
+controls Android's preexisting ADB listener on TCP port 5555; see [installation](install.md#link-view-adb-debugging-switch).
+There is no camera stream on a panel (8554 on an Echo with a camera).
 
 `echod` also connects out, as on an Echo: to Home Assistant, to the weather and rain map sources
 (Open-Meteo, RainViewer, the Iowa Environmental Mesonet, NASA GIBS, and the US National Weather
@@ -44,6 +46,7 @@ SIP provider when an account is set, and to the other TECHO5 devices on your net
 | Permission | Why |
 |---|---|
 | `RECORD_AUDIO` | The wake word and voice. Asked for on first start. Without it there is no wake word. |
+| `WRITE_SECURE_SETTINGS` | On the tested JBL Link View only, explicitly granted through adb to control Android's ADB debugging setting from Home Assistant. Without this manual grant the switch is absent. OFF closes both USB and Wi-Fi ADB. |
 | `INTERNET` | `echod` talks to Home Assistant and the other TECHO5 devices; the app checks for updates. |
 | `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE` | The app tells `echod` the tablet's network addresses (Android 11 and later hide them from it) and updates them when the network changes. |
 | `CHANGE_WIFI_MULTICAST_STATE` | Lets mDNS in, so Home Assistant can find the panel. |
