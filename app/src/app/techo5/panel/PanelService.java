@@ -65,6 +65,7 @@ public class PanelService extends Service {
     private LocalServerSocket speakerServer;
     private LocalServerSocket screenServer;
     private LocalServerSocket controlServer;
+    private CameraLink camera;
     private volatile Process daemon;
     private Notification notification;
     private ConnectivityManager.NetworkCallback networkWatch;
@@ -152,6 +153,14 @@ public class PanelService extends Service {
         } catch (IOException e) {
             Log.e(TAG, "control socket", e);
         }
+        try {
+            camera = new CameraLink(this);
+            new Thread(new Runnable() {
+                @Override public void run() { camera.serve(); }
+            }, "camera").start();
+        } catch (IOException e) {
+            Log.e(TAG, "camera socket", e);
+        }
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -164,6 +173,13 @@ public class PanelService extends Service {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         goForeground();
+        if (camera != null) {
+            try {
+                if (camera.refreshReady() && daemon != null) daemon.destroy();
+            } catch (IOException e) {
+                Log.w(TAG, "updating camera availability", e);
+            }
+        }
         return START_STICKY;
     }
 
@@ -183,6 +199,10 @@ public class PanelService extends Service {
         if (Build.VERSION.SDK_INT >= 30
                 && checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             types |= ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE;
+        }
+        if (Build.VERSION.SDK_INT >= 34
+                && checkSelfPermission(android.Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            types |= ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA;
         }
         try {
             startForeground(1, notification, types);
@@ -209,6 +229,7 @@ public class PanelService extends Service {
             }
         }
         if (control != null) control.close();
+        if (camera != null) camera.close();
         try {
             if (micServer != null) micServer.close();
             if (speakerServer != null) speakerServer.close();
