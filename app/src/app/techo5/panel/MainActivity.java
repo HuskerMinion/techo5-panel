@@ -25,6 +25,7 @@ import android.widget.TextView;
  */
 public class MainActivity extends Activity implements ScreenLink.Viewer {
     private static final int ASK_MIC = 1;
+    private static final int ASK_CAMERA = 2;
     // HomeGuard answers a microphone prompt only this soon after this screen asked for one.
     private static final long ASK_WINDOW_MS = 30_000;
     private static volatile long askedForMicAt;
@@ -52,14 +53,19 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
             askForMic();
             return;
         }
-        start();
+        startWithCameraPermission();
     }
 
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
+        if (code == ASK_CAMERA) {
+            // Declining camera access leaves voice available.
+            start();
+            return;
+        }
         if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
             if (view != null) return; // asked again while running: the service picks the microphone back up
-            start();
+            startWithCameraPermission();
         } else if (text != null) {
             text.setText("Without the microphone there is no wake word. Allow it in Settings > Apps.");
         }
@@ -70,6 +76,18 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
         requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, ASK_MIC);
     }
 
+    private void startWithCameraPermission() {
+        if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            text = new TextView(this);
+            text.setPadding(48, 48, 48, 48);
+            text.setTextSize(20);
+            text.setText("Allow camera access to share this tablet's camera with Home Assistant and RTSP.");
+            setContentView(text);
+            requestPermissions(new String[] {Manifest.permission.CAMERA}, ASK_CAMERA);
+            return;
+        }
+        start();
+    }
     /** Whether this screen asked for the microphone in the last half minute, so a prompt now is its own. */
     static boolean justAskedForMic() {
         long at = askedForMicAt;
