@@ -302,7 +302,12 @@ public class PanelService extends Service {
         // turns on the platform's own echo canceller where it has one, or "mic" for the raw microphone;
         // anything else is voice recognition, Android's path for speech to text.
         String which = readSetting("mic-source");
-        if (!"vc".equals(which) && !"mic".equals(which)) which = "";
+        if (!"vc".equals(which) && !"mic".equals(which)) {
+            // The JBL Link View identifies as Google's iot_msm8x53_som. Its voice-recognition
+            // source produces flat PCM, while the raw microphone works and still obeys its switch.
+            which = "Google".equals(Build.MANUFACTURER) &&
+                    "iot_msm8x53_som".equals(Build.MODEL) ? "mic" : "";
+        }
         int stalls = 0;
         int tries = 0;
         boolean refused = false;
