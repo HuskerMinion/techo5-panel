@@ -10,7 +10,8 @@ app asks for and why.
 - **Microphone audio** goes from Android to `echod`, inside the tablet, over a local socket. `echod`
   listens for the wake word on the tablet itself. Only after a wake word does it send audio, to your
   Home Assistant's Assist pipeline, as any TECHO5 device does.
-- **The app's local sockets** (`techo5.mic`, `techo5.spk`, `techo5.screen`, `techo5.ctl`) take only
+- **The app's local sockets** (`techo5.mic`, `techo5.spk`, `techo5.screen`, `techo5.ctl`,
+  `techo5.ble`, `techo5.gatt`, `techo5.cam`) take only
   connections from the app's own user, which is `echod`. Any other app that connects is logged and
   closed before anything is sent.
 - **The app itself** connects to one place: this repo's GitHub releases, over https, to check for
@@ -25,13 +26,17 @@ running TECHO5:
 | Port | What | When |
 |---|---|---|
 | 6053 (TCP) | The ESPHome API Home Assistant connects to. Encrypted with the key Home Assistant sets. | Always |
+| 8554 (TCP) | Digest-authenticated RTP/JPEG from the Android camera. Video itself is not encrypted; use a trusted LAN. | While Camera streaming and a login are set |
 | 5353 (UDP) | mDNS, so Home Assistant and the other TECHO5 devices find the panel. | Always |
 | 8181 (TCP) | The setup page, the screen page, and intercom calls from other TECHO5 devices. | While one of them is switched on |
 | 8928 (TCP) | Sendspin, for a music server playing to the panel. | While Sendspin is on |
 | 1900 (UDP) | DLNA discovery, so a phone app can cast audio to the panel. | While DLNA is on |
 | 5060 (UDP) or 5061 (TLS) | SIP calls. A call rings only when it comes from your provider. | While a SIP account is set |
 
-There is no camera stream on a panel (8554 on an Echo with a camera), no SSH and no remote adb.
+There is no SSH or remote adb on a panel. The camera opens only while Camera streaming is on and a
+viewer requests it. Full-size Home Assistant stills are cached in the daemon's memory for up to one
+minute, and discarded as soon as Camera streaming is switched off; no image is saved to disk. A still
+request briefly pauses and restarts the Android preview while live video is playing.
 
 `echod` also connects out, as on an Echo: to Home Assistant, to the weather and rain map sources
 (Open-Meteo, RainViewer, the Iowa Environmental Mesonet, NASA GIBS, and the US National Weather
@@ -44,11 +49,12 @@ SIP provider when an account is set, and to the other TECHO5 devices on your net
 | Permission | Why |
 |---|---|
 | `RECORD_AUDIO` | The wake word and voice. Asked for on first start. Without it there is no wake word. |
+| `CAMERA` | The Android front camera for the Home Assistant camera entity and optional RTSP stream. Asked for only after Camera streaming is turned on. |
 | `INTERNET` | `echod` talks to Home Assistant and the other TECHO5 devices; the app checks for updates. |
 | `ACCESS_NETWORK_STATE`, `ACCESS_WIFI_STATE` | The app tells `echod` the tablet's network addresses (Android 11 and later hide them from it) and updates them when the network changes. |
 | `CHANGE_WIFI_MULTICAST_STATE` | Lets mDNS in, so Home Assistant can find the panel. |
 | `WAKE_LOCK` | Keeps the CPU awake with the screen off, so the wake word keeps listening. |
-| `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK` | The service that runs `echod` stays up, and may use the microphone and play sound while another screen is up. Android shows its notification. |
+| `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`, `FOREGROUND_SERVICE_MEDIA_PLAYBACK`, `FOREGROUND_SERVICE_CAMERA` | The service that runs `echod` stays up, and may use the microphone, camera and speaker while another screen is up. Android shows its notification. |
 | `RECEIVE_BOOT_COMPLETED` | Starts the panel after a reboot or a power cut, and after an update. |
 | `REQUEST_INSTALL_PACKAGES` | Installs the app's own updates. It installs nothing else. |
 | `UPDATE_PACKAGES_WITHOUT_USER_ACTION` | On Android 12 and later, the app's own updates install without a prompt. |

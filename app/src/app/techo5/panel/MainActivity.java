@@ -25,9 +25,14 @@ import android.widget.TextView;
  */
 public class MainActivity extends Activity implements ScreenLink.Viewer {
     private static final int ASK_MIC = 1;
+    // 2 is reserved for the Bluetooth permission request in the companion Bluetooth change.
+    private static final int ASK_CAMERA = 3;
     // HomeGuard answers a microphone prompt only this soon after this screen asked for one.
     private static final long ASK_WINDOW_MS = 30_000;
     private static volatile long askedForMicAt;
+    private static volatile MainActivity foreground;
+    private static volatile boolean cameraOn;
+    private static volatile boolean cameraPrompted;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private Handler touches;
@@ -57,6 +62,13 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
 
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
+        if (code == ASK_CAMERA) {
+            // Declining camera access leaves voice available. Toggling Camera streaming off and on
+            // allows another request, without pestering the user on every screen resume.
+            if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED)
+                startForegroundService(new Intent(this, PanelService.class));
+            return;
+        }
         if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
             if (view != null) return; // asked again while running: the service picks the microphone back up
             start();
@@ -70,6 +82,22 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
         requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, ASK_MIC);
     }
 
+    /** Called by the same-UID control line when Camera streaming is switched on or off. */
+    static void cameraSwitch(boolean on) {
+        cameraOn = on;
+        if (!on) cameraPrompted = false;
+        MainActivity activity = foreground;
+        if (activity != null) activity.runOnUiThread(new Runnable() {
+            @Override public void run() { activity.askForCameraIfNeeded(); }
+        });
+    }
+
+    private void askForCameraIfNeeded() {
+        if (!cameraOn || cameraPrompted || view == null ||
+                checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) return;
+        cameraPrompted = true;
+        requestPermissions(new String[] {Manifest.permission.CAMERA}, ASK_CAMERA);
+    }
     /** Whether this screen asked for the microphone in the last half minute, so a prompt now is its own. */
     static boolean justAskedForMic() {
         long at = askedForMicAt;
@@ -81,11 +109,13 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
         view = new PanelView(this);
         setContentView(view);
         fullScreen();
+        askForCameraIfNeeded();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        foreground = this;
         // The microphone can be taken back while the app runs (Fire OS does, see HomeGuard): ask again.
         if (view != null && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             askForMic();
@@ -95,11 +125,13 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
             ScreenLink.setViewer(this);
             // Started again from the front, so the service may keep the microphone (see PanelService).
             startForegroundService(new Intent(this, PanelService.class));
+            askForCameraIfNeeded();
         }
     }
 
     @Override
     protected void onPause() {
+        if (foreground == this) foreground = null;
         ScreenLink.setViewer(null);
         super.onPause();
     }
