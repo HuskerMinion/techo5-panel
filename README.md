@@ -55,3 +55,16 @@ MIT, as techo5. See [LICENSE](LICENSE). What the APK carries from other projects
 libraries, fonts, sounds and wake word models) is listed in [NOTICE](NOTICE).
 
 TECHO5 is not affiliated with or endorsed by Amazon, Samsung, Meta or Google.
+
+### Bluetooth proxy
+
+With a matching daemon build, Android BLE advertisements follow **Bluetooth proxy**, on by
+default. The app asks for location and nearby-device permissions while in front.
+**Bluetooth proxy connections** is a separate switch, initially off; an API encryption key is
+required. It lends one GATT connection for service discovery, characteristic/descriptor reads and
+writes, and notifications. Turning the proxy off releases connections too. Pairing and service-cache
+clearing are not offered. Android handles ordinary Bluetooth audio independently.
+
+The daemon uses the shared connection manager from techo5; this app supplies same-UID local scan
+and GATT sockets. Real ATT handles are required. On Android versions that hide descriptor handles,
+the bridge refuses the connection rather than inventing handles that conflict with HA's cache.

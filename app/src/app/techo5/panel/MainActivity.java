@@ -25,12 +25,14 @@ import android.widget.TextView;
  */
 public class MainActivity extends Activity implements ScreenLink.Viewer {
     private static final int ASK_MIC = 1;
-    // 2 is reserved for the Bluetooth permission request in the companion Bluetooth change.
+    private static final int ASK_BLE = 2;
     private static final int ASK_CAMERA = 3;
     // HomeGuard answers a microphone prompt only this soon after this screen asked for one.
     private static final long ASK_WINDOW_MS = 30_000;
     private static volatile long askedForMicAt;
     private static volatile MainActivity foreground;
+    private static volatile boolean bleOn;
+    private static volatile boolean askedForBle;
     private static volatile boolean cameraOn;
     private static volatile boolean cameraPrompted;
 
@@ -38,6 +40,7 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
     private Handler touches;
     private PanelView view;
     private TextView text;
+    private boolean permissionPending;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -62,11 +65,24 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
 
     @Override
     public void onRequestPermissionsResult(int code, String[] perms, int[] results) {
+        permissionPending = false;
+        if (code == ASK_BLE) {
+            if (results.length == 0) { askForCameraIfNeeded(); return; }
+            for (int result : results) if (result != PackageManager.PERMISSION_GRANTED) {
+                askForCameraIfNeeded();
+                return;
+            }
+            askedForBle = false;
+            askForBleIfNeeded();
+            askForCameraIfNeeded();
+            return;
+        }
         if (code == ASK_CAMERA) {
             // Declining camera access leaves voice available. Toggling Camera streaming off and on
             // allows another request, without pestering the user on every screen resume.
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED)
                 startForegroundService(new Intent(this, PanelService.class));
+            askForBleIfNeeded();
             return;
         }
         if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
@@ -78,8 +94,36 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
     }
 
     private void askForMic() {
+        if (permissionPending) return;
+        permissionPending = true;
         askedForMicAt = android.os.SystemClock.elapsedRealtime();
         requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, ASK_MIC);
+    }
+
+    /** Permission requests follow the proxy switch; scanning is enabled by default. */
+    static void bleSwitch(boolean on) {
+        bleOn = on;
+        if (!on) askedForBle = false;
+        MainActivity activity = foreground;
+        if (activity != null) activity.runOnUiThread(new Runnable() {
+            @Override public void run() { activity.askForBleIfNeeded(); }
+        });
+    }
+
+    private void askForBleIfNeeded() {
+        if (!bleOn || view == null || askedForBle || permissionPending) return;
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            askedForBle = true;
+            permissionPending = true;
+            requestPermissions(new String[] {Manifest.permission.ACCESS_FINE_LOCATION}, ASK_BLE);
+        } else if (android.os.Build.VERSION.SDK_INT >= 31 &&
+                (checkSelfPermission(Manifest.permission.BLUETOOTH_SCAN) != PackageManager.PERMISSION_GRANTED ||
+                 checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED)) {
+            askedForBle = true;
+            permissionPending = true;
+            requestPermissions(new String[] {Manifest.permission.BLUETOOTH_SCAN,
+                    Manifest.permission.BLUETOOTH_CONNECT}, ASK_BLE);
+        }
     }
 
     /** Called by the same-UID control line when Camera streaming is switched on or off. */
@@ -93,9 +137,10 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
     }
 
     private void askForCameraIfNeeded() {
-        if (!cameraOn || cameraPrompted || view == null ||
+        if (!cameraOn || cameraPrompted || permissionPending || view == null ||
                 checkSelfPermission(Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) return;
         cameraPrompted = true;
+        permissionPending = true;
         requestPermissions(new String[] {Manifest.permission.CAMERA}, ASK_CAMERA);
     }
     /** Whether this screen asked for the microphone in the last half minute, so a prompt now is its own. */
@@ -110,6 +155,7 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
         setContentView(view);
         fullScreen();
         askForCameraIfNeeded();
+        askForBleIfNeeded();
     }
 
     @Override
@@ -126,6 +172,7 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
             // Started again from the front, so the service may keep the microphone (see PanelService).
             startForegroundService(new Intent(this, PanelService.class));
             askForCameraIfNeeded();
+            askForBleIfNeeded();
         }
     }
 
