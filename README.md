@@ -68,3 +68,8 @@ clearing are not offered. Android handles ordinary Bluetooth audio independently
 The daemon uses the shared connection manager from techo5; this app supplies same-UID local scan
 and GATT sockets. Real ATT handles are required. On Android versions that hide descriptor handles,
 the bridge refuses the connection rather than inventing handles that conflict with HA's cache.
+
+GATT retries coalesce scan resumes, and all scan registrations share Android's rolling
+registration budget. Long-running scans renew before Oreo downgrades them to opportunistic
+mode. The shared daemon owns connection deadlines; closing its socket cancels Android GATT.
+Run `sh tools/test-bluetooth.sh` with a JDK to check the scan policy without an Android device.

@@ -13,8 +13,6 @@ import android.net.LocalServerSocket;
 import android.net.LocalSocket;
 import android.util.Base64;
 import android.util.Log;
-import android.os.Handler;
-import android.os.Looper;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -113,7 +111,6 @@ final class GattLink {
         volatile boolean responded;
         volatile int connectReplies;
         volatile BluetoothDevice target;
-        final Handler main = new Handler(Looper.getMainLooper());
 
         Session(LocalSocket conn) throws IOException {
             this.conn = conn;
@@ -286,14 +283,8 @@ final class GattLink {
             try {
                 gatt = target.connectGatt(context, false, callback, BluetoothDevice.TRANSPORT_LE);
                 if (gatt == null) throw new IllegalStateException("connectGatt returned null");
-                final BluetoothGatt started = gatt;
-                main.postDelayed(new Runnable() {
-                    @Override public void run() {
-                        if (stopping || connected || gatt != started) return;
-                        Log.w(TAG, "gatt connection timed out");
-                        failAttempt(started, 0x85);
-                    }
-                }, 7000);
+                // The shared daemon manager owns the connection deadline. Closing its socket
+                // cancels BluetoothGatt in Session.finally, including a controller that never replies.
                 Log.i(TAG, "gatt connection started");
             } catch (RuntimeException e) {
                 Log.w(TAG, "gatt connection failed to start", e);

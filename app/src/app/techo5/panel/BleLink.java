@@ -13,6 +13,9 @@ import android.content.pm.PackageManager;
 import android.net.LocalServerSocket;
 import android.net.LocalSocket;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 
 import java.io.ByteArrayOutputStream;
@@ -38,6 +41,76 @@ final class BleLink {
     private ScanSession currentSession;
     private boolean scanning;
     private int connectionPauses;
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private final ScanStartBudget budget = new ScanStartBudget();
+    private Runnable restart;
+    // Coalesce the shared manager's retries, rather than register a scan between each attempt.
+    private static final long RESUME_DELAY_MS = 1500;
+    // Oreo eventually moves a long scan to opportunistic mode. Renew before that happens.
+    private static final long RENEW_MS = 20 * 60 * 1000;
+
+    private void cancelRestart() {
+        if (restart != null) main.removeCallbacks(restart);
+        restart = null;
+    }
+
+    // Called only with scanLock held. All starts, including retries/renewals, share one budget.
+    private void startScan(final ScanSession session) {
+        if (closed || connectionPauses != 0 || scanning || currentSession != session || session.failed) return;
+        long now = SystemClock.elapsedRealtime();
+        long delay = budget.delay(now);
+        if (delay != 0) { scheduleStart(session, delay); return; }
+        budget.started(now);
+        try {
+            currentScanner.startScan(null, currentSettings, currentCallback);
+            scanning = true;
+            Log.i(TAG, "ble scan registered");
+            restart = new Runnable() {
+                @Override public void run() {
+                    synchronized (scanLock) {
+                        if (restart != this) return;
+                        restart = null;
+                        if (currentSession != session || !scanning || connectionPauses != 0 || closed) return;
+                        try { currentScanner.stopScan(currentCallback); }
+                        catch (RuntimeException e) { session.failed = true; return; }
+                        scanning = false;
+                        startScan(session);
+                    }
+                }
+            };
+            main.postDelayed(restart, RENEW_MS);
+        } catch (RuntimeException e) {
+            session.failed = true;
+            Log.w(TAG, "ble scan start failed", e);
+        }
+    }
+
+    private void scheduleStart(final ScanSession session, long delay) {
+        cancelRestart();
+        restart = new Runnable() {
+            @Override public void run() {
+                synchronized (scanLock) {
+                    if (restart != this) return;
+                    restart = null;
+                    startScan(session);
+                }
+            }
+        };
+        main.postDelayed(restart, delay);
+    }
+
+    private void endScan(ScanSession session) {
+        synchronized (scanLock) {
+            if (currentSession != session) return;
+            cancelRestart();
+            if (scanning && currentScanner != null) {
+                try { currentScanner.stopScan(currentCallback); }
+                catch (RuntimeException e) { Log.w(TAG, "ble scan stop failed", e); }
+            }
+            currentScanner = null; currentCallback = null; currentSettings = null;
+            currentSession = null; scanning = false;
+        }
+    }
 
     BleLink(Context context) throws IOException {
         this.context = context;
@@ -45,7 +118,7 @@ final class BleLink {
     }
 
     void close() {
-        closed = true;
+        synchronized (scanLock) { closed = true; cancelRestart(); }
         try { server.close(); } catch (IOException ignored) { }
         LocalSocket c = active;
         if (c != null) try { c.close(); } catch (IOException ignored) { }
@@ -62,8 +135,10 @@ final class BleLink {
                 } catch (RuntimeException e) {
                     connectionPauses--;
                     Log.w(TAG, "could not pause BLE scanning", e);
+                    return; // Keep the running scan's renewal timer.
                 }
             }
+            cancelRestart();
         }
     }
 
@@ -73,14 +148,7 @@ final class BleLink {
             connectionPauses--;
             if (connectionPauses != 0 || scanning || currentScanner == null || closed
                     || currentSession == null || currentSession.failed) return;
-            try {
-                currentScanner.startScan(null, currentSettings, currentCallback);
-                scanning = true;
-                Log.i(TAG, "ble scan resumed after GATT connection");
-            } catch (RuntimeException e) {
-                currentSession.failed = true;
-                Log.w(TAG, "ble scan resume failed", e);
-            }
+            scheduleStart(currentSession, RESUME_DELAY_MS);
         }
     }
 
@@ -143,21 +211,19 @@ final class BleLink {
                 currentCallback = callback;
                 currentSettings = settings;
                 currentSession = session;
-                if (connectionPauses == 0) {
-                    scanner.startScan(null, settings, callback);
-                    scanning = true;
-                }
+                startScan(session);
+                if (session.failed) throw new IllegalStateException("scan start rejected");
             }
             out.write(0);
             Log.i(TAG, "ble scan started");
         } catch (RuntimeException e) {
-            synchronized (scanLock) {
-                currentScanner = null; currentCallback = null; currentSettings = null;
-                currentSession = null; scanning = false;
-            }
+            endScan(session);
             out.write(4);
             Log.w(TAG, "ble scan start", e);
             return;
+        } catch (IOException e) {
+            endScan(session); // A daemon that left during the handshake must not leave a scan behind.
+            throw e;
         }
 
         Thread eof = new Thread(new Runnable() {
@@ -181,11 +247,7 @@ final class BleLink {
                 out.write(frame);
             }
         } finally {
-            synchronized (scanLock) {
-                if (scanning && currentScanner == scanner) scanner.stopScan(callback);
-                currentScanner = null; currentCallback = null; currentSettings = null;
-                currentSession = null; scanning = false;
-            }
+            endScan(session);
             conn.close();
             Log.i(TAG, "ble scan stopped, reports=" + session.reports +
                     " dropped=" + session.dropped);
@@ -220,8 +282,8 @@ final class BleLink {
     }
 
     // Android 8.1 has no public address-type accessor. Use one when the platform exposes it;
-    // otherwise mark public, which supports passive advertisement matching but not every random
-    // address integration. GATT connections are not advertised by this proxy.
+    // otherwise report public. GATT uses the BluetoothDevice remembered from the actual scan,
+    // allowing Android's stack to retain its controller-side address information.
     private static byte addressType(BluetoothDevice device) {
         try {
             Method m = BluetoothDevice.class.getMethod("getAddressType");
