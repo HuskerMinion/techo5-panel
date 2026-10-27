@@ -73,3 +73,18 @@ GATT retries coalesce scan resumes, and all scan registrations share Android's r
 registration budget. Long-running scans renew before Oreo downgrades them to opportunistic
 mode. The shared daemon owns connection deadlines; closing its socket cancels Android GATT.
 Run `sh tools/test-bluetooth.sh` with a JDK to check the scan policy without an Android device.
+
+The scan limits and long-scan downgrade are described in Android 8.1's
+[AppScanStats](https://android.googlesource.com/platform/packages/apps/Bluetooth/+/android-8.1.0_r1/src/com/android/bluetooth/gatt/AppScanStats.java)
+and [ScanManager](https://android.googlesource.com/platform/packages/apps/Bluetooth/+/android-8.1.0_r1/src/com/android/bluetooth/gatt/ScanManager.java).
+
+Hardware regression on a JBL Link View (Android 8.1.0): Mooshimeter service discovery,
+characteristic and descriptor reads/writes, notifications, cached reconnects without another
+service request, error replies, request ownership without a slot subscription, and
+abandoned-client cleanup passed. The latter freed the one slot in 0.23 seconds with an
+observer subscribed before the connection. Both proxy switches and six rapid scanner
+restart cycles passed. A 22-minute idle run delivered 26,553 advertisements, including
+254 meter reports, across the scheduled renewal; active GATT passed again afterward
+and after a normal device reboot. Voice and camera regression checks also passed.
+The meter does not offer write-without-response, so that operation lacks fresh peripheral
+coverage. Other Android models have not been tested by this run.
