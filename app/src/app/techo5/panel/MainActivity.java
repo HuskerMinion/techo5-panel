@@ -100,7 +100,7 @@ public class MainActivity extends Activity implements ScreenLink.Viewer {
         requestPermissions(new String[] {Manifest.permission.RECORD_AUDIO}, ASK_MIC);
     }
 
-    /** Permission requests follow the proxy switch; scanning is enabled by default. */
+    /** Permission requests follow the proxy switch, which is off by default. */
     static void bleSwitch(boolean on) {
         bleOn = on;
         if (!on) askedForBle = false;

@@ -58,8 +58,8 @@ TECHO5 is not affiliated with or endorsed by Amazon, Samsung, Meta or Google.
 
 ### Bluetooth proxy
 
-With a matching daemon build, Android BLE advertisements follow **Bluetooth proxy**, on by
-default. The app asks for location and nearby-device permissions while in front.
+With a matching daemon build, Android BLE advertisements follow **Bluetooth proxy**, off by
+default. Once it is on, the app asks for location and nearby-device permissions while in front.
 **Bluetooth proxy connections** is a separate switch, initially off; an API encryption key is
 required. It lends one GATT connection for service discovery, characteristic/descriptor reads and
 writes, and notifications. Turning the proxy off releases connections too. Pairing and service-cache
