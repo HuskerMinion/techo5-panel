@@ -55,3 +55,36 @@ MIT, as techo5. See [LICENSE](LICENSE). What the APK carries from other projects
 libraries, fonts, sounds and wake word models) is listed in [NOTICE](NOTICE).
 
 TECHO5 is not affiliated with or endorsed by Amazon, Samsung, Meta or Google.
+
+### Bluetooth proxy
+
+With a matching daemon build, Android BLE advertisements follow **Bluetooth proxy**, on by
+default. The app asks for location and nearby-device permissions while in front.
+**Bluetooth proxy connections** is a separate switch, initially off; an API encryption key is
+required. It lends one GATT connection for service discovery, characteristic/descriptor reads and
+writes, and notifications. Turning the proxy off releases connections too. Pairing and service-cache
+clearing are not offered. Android handles ordinary Bluetooth audio independently.
+
+The daemon uses the shared connection manager from techo5; this app supplies same-UID local scan
+and GATT sockets. Real ATT handles are required. On Android versions that hide descriptor handles,
+the bridge refuses the connection rather than inventing handles that conflict with HA's cache.
+
+GATT retries coalesce scan resumes, and all scan registrations share Android's rolling
+registration budget. Long-running scans renew before Oreo downgrades them to opportunistic
+mode. The shared daemon owns connection deadlines; closing its socket cancels Android GATT.
+Run `sh tools/test-bluetooth.sh` with a JDK to check the scan policy without an Android device.
+
+The scan limits and long-scan downgrade are described in Android 8.1's
+[AppScanStats](https://android.googlesource.com/platform/packages/apps/Bluetooth/+/android-8.1.0_r1/src/com/android/bluetooth/gatt/AppScanStats.java)
+and [ScanManager](https://android.googlesource.com/platform/packages/apps/Bluetooth/+/android-8.1.0_r1/src/com/android/bluetooth/gatt/ScanManager.java).
+
+Hardware regression on a JBL Link View (Android 8.1.0): Mooshimeter service discovery,
+characteristic and descriptor reads/writes, notifications, cached reconnects without another
+service request, error replies, request ownership without a slot subscription, and
+abandoned-client cleanup passed. The latter freed the one slot in 0.23 seconds with an
+observer subscribed before the connection. Both proxy switches and six rapid scanner
+restart cycles passed. A 22-minute idle run delivered 26,553 advertisements, including
+254 meter reports, across the scheduled renewal; active GATT passed again afterward
+and after a normal device reboot. Voice and camera regression checks also passed.
+The meter does not offer write-without-response, so that operation lacks fresh peripheral
+coverage. Other Android models have not been tested by this run.

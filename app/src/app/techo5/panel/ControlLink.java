@@ -116,6 +116,10 @@ final class ControlLink {
     }
 
     private void handle(String[] w) {
+        if (w.length == 2 && w[0].equals("ble") && (w[1].equals("0") || w[1].equals("1"))) {
+            MainActivity.bleSwitch(w[1].equals("1"));
+            return;
+        }
         if (w.length == 2 && w[0].equals("camera") && (w[1].equals("0") || w[1].equals("1"))) {
             MainActivity.cameraSwitch(w[1].equals("1"));
             return;
