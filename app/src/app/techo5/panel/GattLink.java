@@ -455,7 +455,9 @@ final class GattLink {
             }
             @Override public void onCharacteristicChanged(BluetoothGatt g, BluetoothGattCharacteristic ch) {
                 if (gatt != g) return;
-                JSONObject e = event("notify_data", find(ch));
+                int handle = find(ch);
+                if (handle == 0) return;
+                JSONObject e = event("notify_data", handle);
                 try { e.put("data", Base64.encodeToString(ch.getValue() == null ? new byte[0] : ch.getValue(), Base64.NO_WRAP)); }
                 catch (JSONException ignored) { }
                 send(e);
