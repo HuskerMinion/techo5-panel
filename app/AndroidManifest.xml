@@ -26,6 +26,15 @@
     <!-- Android 12 and later install this app's own updates without asking, with this. -->
     <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
+    <!-- Android 11 and later show an app only the apps it says it looks for: the launcher's, for the
+         Apps row on echod's settings screen (ControlLink.sendApps). -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <application
         android:label="TECHO5 Panel"
         android:extractNativeLibs="true"

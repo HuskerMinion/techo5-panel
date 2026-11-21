@@ -27,7 +27,7 @@ import java.util.List;
  */
 public class HomeGuard extends AccessibilityService {
     private static final String TAG = "techo5-panel";
-    private static final String LAUNCHER = "com.amazon.firelauncher";
+    static final String LAUNCHER = "com.amazon.firelauncher";
 
     private final Handler later = new Handler(Looper.getMainLooper());
 
