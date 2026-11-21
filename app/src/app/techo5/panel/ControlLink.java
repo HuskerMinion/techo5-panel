@@ -21,6 +21,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -225,7 +226,12 @@ final class ControlLink {
             seen.add(pkg);
             apps.add(new String[] {label, pkg});
         }
-        Collections.sort(apps, (a, b) -> a[0].compareToIgnoreCase(b[0]));
+        Collections.sort(apps, new Comparator<String[]>() {
+            @Override
+            public int compare(String[] a, String[] b) {
+                return a[0].compareToIgnoreCase(b[0]);
+            }
+        });
         send("apps begin");
         for (String[] a : apps) send("apps item " + a[1] + " " + a[0]);
         send("apps end");
