@@ -1,5 +1,6 @@
 package app.techo5.panel;
 
+import android.content.ActivityNotFoundException;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -8,6 +9,7 @@ import android.media.AudioManager;
 import android.net.LocalServerSocket;
 import android.net.LocalSocket;
 import android.os.Build;
+import android.provider.Settings;
 import android.util.Log;
 
 import java.io.BufferedReader;
@@ -31,6 +33,11 @@ import java.nio.charset.StandardCharsets;
  * installs a newer build if there is one. The app's Updater does both, since the app is what gets
  * updated. "update <running> <offered>" goes back after every check and whenever echod connects, for
  * Home Assistant's update card.
+ *
+ * Android's settings: "android settings can" goes to echod on every connection, so its settings screen
+ * shows an Android settings row (echod from before the line ignores it); "android settings open" from
+ * that row opens the tablet's own Settings (openAndroidSettings), and "android settings none" goes back
+ * when the tablet has nothing to open.
  */
 final class ControlLink {
     private static final String TAG = "techo5-panel";
@@ -103,6 +110,7 @@ final class ControlLink {
                     out = conn.getOutputStream();
                 }
                 send(Updater.report(ctx));
+                send("android settings can");
                 BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
                 for (String line; (line = in.readLine()) != null; ) handle(line.trim().split("\\s+"));
             } catch (IOException e) {
@@ -122,6 +130,10 @@ final class ControlLink {
         }
         if (w.length == 2 && w[0].equals("camera") && (w[1].equals("0") || w[1].equals("1"))) {
             MainActivity.cameraSwitch(w[1].equals("1"));
+            return;
+        }
+        if (w.length >= 3 && w[0].equals("android") && w[1].equals("settings") && w[2].equals("open")) {
+            if (!openAndroidSettings()) send("android settings none");
             return;
         }
         if (w.length >= 2 && w[0].equals("update") && (w[1].equals("check") || w[1].equals("install"))) {
@@ -147,6 +159,28 @@ final class ControlLink {
             } catch (NumberFormatException ignored) {
             }
         }
+    }
+
+    /**
+     * Opens the tablet's own Settings, for a panel that is its home screen and so leaves no other way to
+     * them (the Portal's Settings shortcut opens nothing over it): Android's main Settings screen, or its
+     * wireless settings on a tablet with none for that. A task of its own, over the panel, until Home or
+     * Back brings the panel back. A tap on the panel's screen asked for it, so the app is in front and
+     * Android lets it start an activity. False when neither opens.
+     */
+    private boolean openAndroidSettings() {
+        for (String action : new String[] {Settings.ACTION_SETTINGS, Settings.ACTION_WIRELESS_SETTINGS}) {
+            try {
+                ctx.startActivity(new Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                Log.i(TAG, "android settings: opened " + action);
+                return true;
+            } catch (ActivityNotFoundException e) {
+                Log.w(TAG, "android settings: nothing opens " + action);
+            } catch (RuntimeException e) {
+                Log.w(TAG, "android settings: " + action + ": " + e.getMessage());
+            }
+        }
+        return false;
     }
 
     /** Sends a line to echod if it is connected; a later connection is brought up to date on its own. */
